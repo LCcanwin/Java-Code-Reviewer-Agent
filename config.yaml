@@ -1,0 +1,26 @@
+github:
+  token_env: GITHUB_TOKEN
+  api_url: https://api.github.com
+
+gitlab:
+  token_env: GITLAB_TOKEN
+  api_url: https://gitlab.com/api/v4
+
+llm:
+  provider: openai
+  model: gpt-4o
+  temperature: 0
+  max_tokens: 4096
+
+review:
+  max_files: 50
+  max_context_lines: 100
+
+git:
+  clone_depth: 1
+  branch_prefix: java-reviewer/
+
+rag:
+  vector_store: faiss
+  embedding_model: text-embedding-3-small
+  top_k: 5
