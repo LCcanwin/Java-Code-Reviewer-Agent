@@ -90,6 +90,9 @@ class Issue(TypedDict):
 src/java_code_reviewer/
 ├── main.py              # 入口点，LangGraph 编译
 ├── config.py            # 配置管理
+├── api.py               # FastAPI Web 服务
+├── templates/
+│   └── index.html       # 前端页面
 ├── state/
 │   └── review_state.py  # ReviewState、ReviewMode、Severity、Issue 定义
 ├── nodes/
@@ -133,6 +136,9 @@ source venv/bin/activate
 
 # 安装依赖
 pip install -r requirements.txt
+
+# Web 界面额外依赖（如果需要）
+pip install fastapi uvicorn
 
 # 配置环境变量
 cp .env.example .env
@@ -205,6 +211,22 @@ print(result["markdown_report"])    # Markdown 报告
 print(result["issues"])            # 问题列表
 print(result["patch_commit_sha"])   # 提交 SHA（仅 autofix 模式）
 ```
+
+### Web 界面
+
+启动 FastAPI Web 服务，在浏览器中可视化查看审查结果：
+
+![前端界面](agent.png)
+
+```bash
+# 启动服务
+PYTHONPATH=src python3 -c "from java_code_reviewer.api import app; import uvicorn; uvicorn.run(app, host='0.0.0.0', port=8000)"
+
+# 或使用包入口
+PYTHONPATH=src python3 -m java_code_reviewer.web
+```
+
+服务启动后访问 http://localhost:8000
 
 ### GitHub Actions 集成
 

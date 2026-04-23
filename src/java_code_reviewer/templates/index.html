@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Java Code Reviewer - 阿里 Java 代码审查工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .input-group input {
+            flex: 1;
+            padding: 14px 18px;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .input-group button {
+            padding: 14px 32px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .input-group button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .input-group button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .mode-selector {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            align-items: center;
+        }
+
+        .mode-selector label {
+            font-weight: 500;
+            color: #4a5568;
+        }
+
+        .mode-selector select {
+            padding: 8px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #e2e8f0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .results {
+            display: none;
+        }
+
+        .results.show {
+            display: block;
+        }
+
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+            padding: 20px;
+            background: #f7fafc;
+            border-radius: 10px;
+        }
+
+        .summary-item {
+            text-align: center;
+        }
+
+        .summary-item .count {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .summary-item .label {
+            color: #718096;
+            font-size: 0.9rem;
+        }
+
+        .severity-section {
+            margin-bottom: 25px;
+        }
+
+        .severity-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            color: white;
+        }
+
+        .severity-header.blocker { background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%); }
+        .severity-header.critical { background: linear-gradient(135deg, #dd6b20 0%, #c05621 100%); }
+        .severity-header.warning { background: linear-gradient(135deg, #d69e2e 0%, #b7791f 100%); }
+        .severity-header.info { background: linear-gradient(135deg, #3182ce 0%, #2c5282 100%); }
+
+        .severity-header h3 {
+            flex: 1;
+        }
+
+        .severity-count {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+
+        .issue-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 18px;
+            margin-bottom: 12px;
+            background: white;
+            transition: box-shadow 0.2s;
+        }
+
+        .issue-card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        .issue-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .issue-header .rule-id {
+            background: #edf2f7;
+            color: #4a5568;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .issue-header .file-info {
+            color: #718096;
+            font-size: 14px;
+        }
+
+        .issue-header .file-info strong {
+            color: #2d3748;
+        }
+
+        .issue-message {
+            color: #2d3748;
+            margin-bottom: 12px;
+            line-height: 1.6;
+        }
+
+        .issue-code {
+            background: #1a202c;
+            color: #e2e8f0;
+            padding: 14px;
+            border-radius: 8px;
+            font-family: "Fira Code", "Consolas", monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            margin-bottom: 12px;
+        }
+
+        .issue-suggestion {
+            background: #f0fff4;
+            border: 1px solid #9ae6b4;
+            padding: 12px 16px;
+            border-radius: 8px;
+            color: #276749;
+        }
+
+        .issue-suggestion strong {
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        .issue-suggestion code {
+            background: rgba(0, 0, 0, 0.05);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: "Fira Code", "Consolas", monospace;
+        }
+
+        .no-issues {
+            text-align: center;
+            padding: 60px 20px;
+            color: #48bb78;
+        }
+
+        .no-issues svg {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 20px;
+        }
+
+        .error-message {
+            background: #fff5f5;
+            border: 1px solid #feb2b2;
+            color: #c53030;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Java Code Reviewer</h1>
+            <p>基于阿里 Java 开发标准的自动化代码审查工具</p>
+        </div>
+
+        <div class="card">
+            <div class="input-group">
+                <input type="text" id="prUrl" placeholder="请输入 GitHub PR URL (例如: https://github.com/user/repo/pull/123)" value="">
+                <button id="reviewBtn" onclick="runReview()">开始审查</button>
+            </div>
+
+            <div class="mode-selector">
+                <label for="mode">审查模式：</label>
+                <select id="mode">
+                    <option value="audit_only">仅审查 (Audit Only)</option>
+                    <option value="autofix">自动修复 (AutoFix)</option>
+                </select>
+            </div>
+
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>正在审查代码，请稍候...</p>
+            </div>
+
+            <div class="results" id="results">
+                <div class="summary" id="summary"></div>
+                <div id="issuesList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function runReview() {
+            const prUrl = document.getElementById('prUrl').value.trim();
+            const mode = document.getElementById('mode').value;
+
+            if (!prUrl) {
+                alert('请输入 PR URL');
+                return;
+            }
+
+            const btn = document.getElementById('reviewBtn');
+            const loading = document.getElementById('loading');
+            const results = document.getElementById('results');
+
+            btn.disabled = true;
+            loading.classList.add('show');
+            results.classList.remove('show');
+
+            try {
+                const response = await fetch('/api/review', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ pr_url: prUrl, mode }),
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.detail || '审查失败');
+                }
+
+                displayResults(data);
+            } catch (error) {
+                const issuesList = document.getElementById('issuesList');
+                issuesList.innerHTML = `<div class="error-message"><strong>错误：</strong>${error.message}</div>`;
+            } finally {
+                btn.disabled = false;
+                loading.classList.remove('show');
+                results.classList.add('show');
+            }
+        }
+
+        function displayResults(data) {
+            const summary = document.getElementById('summary');
+            const issuesList = document.getElementById('issuesList');
+
+            if (!data.success && data.error) {
+                issuesList.innerHTML = `<div class="error-message"><strong>错误：</strong>${data.error}</div>`;
+                return;
+            }
+
+            const issues = data.issues || [];
+            const counts = { blocker: 0, critical: 0, warning: 0, info: 0 };
+
+            issues.forEach(issue => {
+                const severity = issue.severity?.toLowerCase() || 'info';
+                if (counts.hasOwnProperty(severity)) {
+                    counts[severity]++;
+                } else {
+                    counts.info++;
+                }
+            });
+
+            summary.innerHTML = `
+                <div class="summary-item">
+                    <div class="count">${data.total_issues || 0}</div>
+                    <div class="label">总问题数</div>
+                </div>
+                <div class="summary-item">
+                    <div class="count" style="color: #e53e3e;">${counts.blocker}</div>
+                    <div class="label">阻塞</div>
+                </div>
+                <div class="summary-item">
+                    <div class="count" style="color: #dd6b20;">${counts.critical}</div>
+                    <div class="label">严重</div>
+                </div>
+                <div class="summary-item">
+                    <div class="count" style="color: #d69e2e;">${counts.warning}</div>
+                    <div class="label">警告</div>
+                </div>
+                <div class="summary-item">
+                    <div class="count" style="color: #3182ce;">${counts.info}</div>
+                    <div class="label">提示</div>
+                </div>
+            `;
+
+            if (issues.length === 0) {
+                issuesList.innerHTML = `
+                    <div class="no-issues">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                        </svg>
+                        <h2>恭喜！未发现问题</h2>
+                        <p>您的代码符合阿里 Java 开发标准</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const grouped = {
+                blocker: issues.filter(i => i.severity?.toLowerCase() === 'blocker'),
+                critical: issues.filter(i => i.severity?.toLowerCase() === 'critical'),
+                warning: issues.filter(i => i.severity?.toLowerCase() === 'warning'),
+                info: issues.filter(i => i.severity?.toLowerCase() === 'info'),
+            };
+
+            let html = '';
+
+            if (grouped.blocker.length > 0) {
+                html += renderSeveritySection('阻塞', 'blocker', grouped.blocker);
+            }
+            if (grouped.critical.length > 0) {
+                html += renderSeveritySection('严重', 'critical', grouped.critical);
+            }
+            if (grouped.warning.length > 0) {
+                html += renderSeveritySection('警告', 'warning', grouped.warning);
+            }
+            if (grouped.info.length > 0) {
+                html += renderSeveritySection('提示', 'info', grouped.info);
+            }
+
+            issuesList.innerHTML = html;
+        }
+
+        function renderSeveritySection(title, className, issues) {
+            return `
+                <div class="severity-section">
+                    <div class="severity-header ${className}">
+                        <h3>${title}</h3>
+                        <span class="severity-count">${issues.length} 个问题</span>
+                    </div>
+                    ${issues.map(issue => renderIssueCard(issue)).join('')}
+                </div>
+            `;
+        }
+
+        function renderIssueCard(issue) {
+            const suggestion = issue.suggestion ? `
+                <div class="issue-suggestion">
+                    <strong>建议修复：</strong>
+                    <code>${escapeHtml(issue.suggestion)}</code>
+                </div>
+            ` : '';
+
+            return `
+                <div class="issue-card">
+                    <div class="issue-header">
+                        <span class="rule-id">${escapeHtml(issue.rule_id)}</span>
+                        <span class="file-info">
+                            <strong>${escapeHtml(issue.file_path)}</strong>:${issue.line_number}
+                        </span>
+                    </div>
+                    <div class="issue-message">${escapeHtml(issue.message)}</div>
+                    <pre class="issue-code">${escapeHtml(issue.code_snippet)}</pre>
+                    ${suggestion}
+                </div>
+            `;
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
