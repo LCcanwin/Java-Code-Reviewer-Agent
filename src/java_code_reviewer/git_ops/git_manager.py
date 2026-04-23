@@ -32,11 +32,14 @@ class GitManager:
         if target_dir is None:
             target_dir = tempfile.mkdtemp()
 
-        git = Git()
-        if branch:
-            git.clone("--depth", str(self._clone_depth), "--branch", branch, repo_url, target_dir)
-        else:
-            git.clone("--depth", str(self._clone_depth), repo_url, target_dir)
+        try:
+            git = Git()
+            if branch:
+                git.clone("--depth", str(self._clone_depth), "--branch", branch, repo_url, target_dir)
+            else:
+                git.clone("--depth", str(self._clone_depth), repo_url, target_dir)
+        finally:
+            pass  # Caller is responsible for cleanup if target_dir was generated
 
         return target_dir
 
@@ -47,9 +50,13 @@ class GitManager:
         branch_name: str,
         patch_files: dict[str, str],
         message: str,
+        provider: str = "github",
     ) -> str:
         """Create a commit with patch files and return commit SHA."""
-        repo_url = f"https://github.com/{repo_owner}/{repo_name}.git"
+        if provider == "gitlab":
+            repo_url = f"https://gitlab.com/{repo_owner}/{repo_name}.git"
+        else:
+            repo_url = f"https://github.com/{repo_owner}/{repo_name}.git"
         clone_dir = self.clone_repo(repo_url)
 
         repo = Repo(clone_dir)

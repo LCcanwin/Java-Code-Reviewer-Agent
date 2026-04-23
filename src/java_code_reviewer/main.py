@@ -10,10 +10,15 @@ from .nodes import (
     input_node,
     option_router_node,
     patch_node,
+    planner_node,
     report_node,
     reviewer_node,
+    feedback_node,
 )
 from .state.review_state import ReviewMode, ReviewState
+
+
+MAX_FEEDBACK_ITERATIONS = 3
 
 
 def _should_proceed_to_crawler(state: ReviewState) -> bool:
@@ -26,9 +31,27 @@ def _should_proceed_to_retriever(state: ReviewState) -> bool:
     return "diff_content" in state and not state.get("error")
 
 
-def _should_proceed_to_reviewer(state: ReviewState) -> bool:
-    """Check if we should proceed to reviewer after context retriever."""
+def _should_proceed_to_planner(state: ReviewState) -> bool:
+    """Check if we should proceed to planner after context retriever."""
     return "retrieved_context" in state and not state.get("error")
+
+
+def _should_proceed_to_reviewer(state: ReviewState) -> bool:
+    """Check if we should proceed to reviewer after planner."""
+    return "planning_result" in state and not state.get("error")
+
+
+def _should_retry_review(state: ReviewState) -> bool:
+    """Check if we should retry review (feedback not approved and under max iterations)."""
+    return (
+        not state.get("feedback_approved", False)
+        and state.get("feedback_iteration", 0) < MAX_FEEDBACK_ITERATIONS
+    )
+
+
+def _should_proceed_to_router(state: ReviewState) -> bool:
+    """Check if we should proceed to option router (feedback approved)."""
+    return state.get("feedback_approved", False)
 
 
 def compile_graph() -> StateGraph:
@@ -38,7 +61,9 @@ def compile_graph() -> StateGraph:
     graph.add_node("input", input_node)
     graph.add_node("crawler", crawler_node)
     graph.add_node("context_retriever", context_retriever_node)
+    graph.add_node("planner", planner_node)
     graph.add_node("reviewer", reviewer_node)
+    graph.add_node("feedback", feedback_node)
     graph.add_node("option_router", option_router_node)
     graph.add_node("report", report_node)
     graph.add_node("patch", patch_node)
@@ -65,6 +90,15 @@ def compile_graph() -> StateGraph:
 
     graph.add_conditional_edges(
         "context_retriever",
+        _should_proceed_to_planner,
+        {
+            True: "planner",
+            False: END,
+        },
+    )
+
+    graph.add_conditional_edges(
+        "planner",
         _should_proceed_to_reviewer,
         {
             True: "reviewer",
@@ -72,7 +106,20 @@ def compile_graph() -> StateGraph:
         },
     )
 
-    graph.add_edge("reviewer", "option_router")
+    graph.add_edge("reviewer", "feedback")
+
+    graph.add_conditional_edges(
+        "feedback",
+        lambda state: (
+            "retry"
+            if _should_retry_review(state)
+            else "router" if _should_proceed_to_router(state) else END
+        ),
+        {
+            "retry": "reviewer",
+            "router": "option_router",
+        },
+    )
 
     graph.add_conditional_edges(
         "option_router",
@@ -118,6 +165,8 @@ def run_review(pr_url: str, mode: Literal["audit_only", "autofix"] = "audit_only
         "issues": [],
         "route_decision": "report",
         "markdown_report": "",
+        "feedback_iteration": 0,
+        "feedback_approved": False,
     }
 
     result = GRAPH.invoke(initial_state)

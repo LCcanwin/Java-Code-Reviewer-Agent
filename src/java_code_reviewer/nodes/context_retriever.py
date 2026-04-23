@@ -5,6 +5,7 @@ from typing import Optional
 from ..config import get_config
 from ..rag.knowledge_base import KnowledgeBase
 from ..rag.retriever import Retriever
+from ..state.review_state import ReviewState
 
 
 def context_retriever_node(state: ReviewState) -> ReviewState:

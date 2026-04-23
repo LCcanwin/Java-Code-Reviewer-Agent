@@ -26,7 +26,7 @@ class GitLabAgent(PRAgent):
         changed_files = []
 
         changes = mr.changes
-        for change in changes.values():
+        for change in changes:
             if isinstance(change, dict):
                 diff_content += change.get("diff", "") + "\n"
                 changed_files.append(change.get("new_path", ""))

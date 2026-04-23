@@ -1,7 +1,7 @@
 """Input node - URL validation and permission check."""
 
 import re
-from typing import Literal
+from typing import Literal, Optional, Tuple
 
 from ..config import get_config
 from ..state.review_state import ReviewState
@@ -12,17 +12,17 @@ GITHUB_PATTERN = re.compile(
     r"https?://(?:www\.)?github\.com/(?P<owner>[^/]+)/(?P<repo>[^/]+)/pull/(?P<pr>\d+)"
 )
 GITLAB_PATTERN = re.compile(
-    r"https?://(?:www\.)?gitlab\.com/(?P<owner>[^/]+)/(?P<repo>[^/]+)/-//merge_requests/(?P<pr>\d+)"
+    r"https?://(?:www\.)?gitlab\.com/(?P<owner>[^/]+)/(?P<repo>[^/]+)/-/merge_requests/(?P<pr>\d+)"
 )
 
 
-def parse_pr_url(pr_url: str) -> tuple[Literal["github", "gitlab"] | None, str, str, int]:
+def parse_pr_url(pr_url: str) -> Optional[Tuple[Literal["github", "gitlab"], str, str, int]]:
     """Parse PR URL and return (provider, owner, repo, pr_number)."""
     if match := GITHUB_PATTERN.match(pr_url):
         return "github", match.group("owner"), match.group("repo"), int(match.group("pr"))
     if match := GITLAB_PATTERN.match(pr_url):
         return "gitlab", match.group("owner"), match.group("repo"), int(match.group("pr"))
-    return None, "", "", 0
+    return None
 
 
 def check_scope_limit(provider: str, owner: str, repo: str) -> bool:

@@ -64,7 +64,7 @@ def _parse_issues(response: str) -> list[Issue]:
 
     issues: list[Issue] = []
 
-    json_match = re.search(r"\[[\s\S]*\]", response)
+    json_match = re.search(r"\[[\s\S]*?\]", response)
     if not json_match:
         return issues
 

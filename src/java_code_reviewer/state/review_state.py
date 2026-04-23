@@ -66,6 +66,12 @@ class ReviewState(TypedDict):
     # Routing
     route_decision: Literal["report", "patch"]
 
+    # Planning and feedback (for iterative review)
+    planning_result: NotRequired[str]  # Planner's review plan
+    feedback_iteration: NotRequired[int]  # Iteration counter, default 0
+    feedback_approved: NotRequired[bool]  # Whether feedback passed
+    feedback_message: NotRequired[str]  # Detailed feedback message
+
     # Outputs
     markdown_report: str
     patch_files: NotRequired[dict[str, str]]  # file_path -> patched content
