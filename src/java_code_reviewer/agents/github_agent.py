@@ -1,5 +1,7 @@
 """GitHub PR agent using PyGithub."""
 
+import logging
+import urllib.request
 from typing import Optional
 
 from github import Github, PullRequest
@@ -7,6 +9,8 @@ from github.GithubException import GithubException
 
 from ..config import get_config
 from .base import PRAgent, PRMetadata
+
+logger = logging.getLogger(__name__)
 
 
 class GitHubAgent(PRAgent):
@@ -22,7 +26,7 @@ class GitHubAgent(PRAgent):
         repo = self._client.get_repo(f"{repo_owner}/{repo_name}")
         pr = repo.get_pull(pr_number)
 
-        diff_content = pr.get_diff()
+        diff_content = self._fetch_diff(pr.raw_data.get("diff_url"))
         changed_files = [f.filename for f in pr.get_files()]
 
         return PRMetadata(
@@ -44,3 +48,21 @@ class GitHubAgent(PRAgent):
             return True
         except GithubException:
             return False
+
+    def _fetch_diff(self, diff_url: str) -> str:
+        """Fetch diff content from URL with retry."""
+        import time
+
+        for attempt in range(3):
+            try:
+                headers = {}
+                if self._token:
+                    headers["Authorization"] = f"token {self._token}"
+                req = urllib.request.Request(diff_url, headers=headers)
+                with urllib.request.urlopen(req, timeout=30) as response:
+                    return response.read().decode("utf-8")
+            except Exception as e:
+                logger.warning(f"Failed to fetch diff (attempt {attempt + 1}/3): {e}")
+                if attempt < 2:
+                    time.sleep(1)
+        return ""
