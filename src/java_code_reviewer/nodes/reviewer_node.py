@@ -61,20 +61,25 @@ def _format_context(context: dict[str, str]) -> str:
 def _parse_issues(response: str) -> list[Issue]:
     """Parse LLM response into Issue list."""
     import re
+    import logging
 
+    logger = logging.getLogger(__name__)
     issues: list[Issue] = []
 
     json_match = re.search(r"\[[\s\S]*?\]", response)
     if not json_match:
+        logger.warning("No JSON array found in LLM response, returning empty issues")
         return issues
 
     try:
         parsed = json.loads(json_match.group())
         if not isinstance(parsed, list):
+            logger.warning("Parsed JSON is not a list, returning empty issues")
             return issues
 
-        for item in parsed:
+        for idx, item in enumerate(parsed):
             if not isinstance(item, dict):
+                logger.warning(f"Item {idx} is not a dict, skipping: {item}")
                 continue
 
             severity_str = item.get("severity", "warning")
@@ -83,11 +88,17 @@ def _parse_issues(response: str) -> list[Issue]:
             except ValueError:
                 severity = Severity.WARNING
 
+            line_number = 0
+            try:
+                line_number = int(item.get("line_number", 0))
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid line_number '{item.get('line_number')}' for item {idx}, defaulting to 0")
+
             issue: Issue = {
                 "severity": severity,
                 "rule_id": item.get("rule_id", "UNKNOWN"),
                 "file_path": item.get("file_path", ""),
-                "line_number": int(item.get("line_number", 0)),
+                "line_number": line_number,
                 "message": item.get("message", ""),
                 "code_snippet": item.get("code_snippet", ""),
             }
@@ -97,7 +108,7 @@ def _parse_issues(response: str) -> list[Issue]:
 
             issues.append(issue)
 
-    except (json.JSONDecodeError, ValueError):
-        pass
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.warning(f"JSON parsing failed: {e}, returning empty issues")
 
     return issues

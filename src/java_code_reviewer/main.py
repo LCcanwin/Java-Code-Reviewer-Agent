@@ -18,7 +18,7 @@ from .nodes import (
 from .state.review_state import ReviewMode, ReviewState
 
 
-MAX_FEEDBACK_ITERATIONS = 3
+MAX_FEEDBACK_ITERATIONS = 1
 
 
 def _should_proceed_to_crawler(state: ReviewState) -> bool:
@@ -33,11 +33,17 @@ def _should_proceed_to_retriever(state: ReviewState) -> bool:
 
 def _should_proceed_to_planner(state: ReviewState) -> bool:
     """Check if we should proceed to planner after context retriever."""
+    # Skip planner in audit_only mode to save LLM call
+    if state.get("mode") == ReviewMode.AUDIT_ONLY:
+        return False
     return "retrieved_context" in state and not state.get("error")
 
 
 def _should_proceed_to_reviewer(state: ReviewState) -> bool:
     """Check if we should proceed to reviewer after planner."""
+    # In audit_only mode, skip planner and go directly to reviewer
+    if state.get("mode") == ReviewMode.AUDIT_ONLY:
+        return "diff_content" in state and not state.get("error")
     return "planning_result" in state and not state.get("error")
 
 
@@ -50,7 +56,9 @@ def _should_retry_review(state: ReviewState) -> bool:
 
 
 def _should_proceed_to_router(state: ReviewState) -> bool:
-    """Check if we should proceed to option router (feedback approved)."""
+    """Check if we should proceed to option router (feedback approved or audit_only mode)."""
+    if state.get("mode") == ReviewMode.AUDIT_ONLY:
+        return True  # Skip feedback loop in audit_only mode
     return state.get("feedback_approved", False)
 
 
@@ -93,7 +101,7 @@ def compile_graph() -> StateGraph:
         _should_proceed_to_planner,
         {
             True: "planner",
-            False: END,
+            False: "reviewer",  # In audit_only, skip planner and go directly to reviewer
         },
     )
 
@@ -113,11 +121,12 @@ def compile_graph() -> StateGraph:
         lambda state: (
             "retry"
             if _should_retry_review(state)
-            else "router" if _should_proceed_to_router(state) else END
+            else "router" if _should_proceed_to_router(state) else "end"
         ),
         {
             "retry": "reviewer",
             "router": "option_router",
+            "end": END,
         },
     )
 
@@ -167,6 +176,7 @@ def run_review(pr_url: str, mode: Literal["audit_only", "autofix"] = "audit_only
         "markdown_report": "",
         "feedback_iteration": 0,
         "feedback_approved": False,
+        "planning_result": "" if mode == "audit_only" else None,
     }
 
     result = GRAPH.invoke(initial_state)

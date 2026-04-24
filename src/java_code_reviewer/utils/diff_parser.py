@@ -33,19 +33,16 @@ class DiffParser:
         """Parse diff content into structured DiffFile objects."""
         files: list[DiffFile] = []
         current_file: Optional[DiffFile] = None
-        current_hunk_lines: list[str] = []
         current_hunk: Optional[DiffHunk] = None
 
         for line in diff_content.split("\n"):
             if line.startswith("--- ") or line.startswith("diff "):
                 if current_file is not None and current_hunk is not None:
-                    current_file.hunks.append(current_hunk)
                     files.append(current_file)
 
                 old_path = DiffParser._parse_old_path(line)
                 current_file = DiffFile(old_path=old_path, new_path="", hunks=[])
                 current_hunk = None
-                current_hunk_lines = []
 
             elif line.startswith("+++ "):
                 if current_file is not None:
@@ -56,10 +53,9 @@ class DiffParser:
                     current_file.hunks.append(current_hunk)
 
                 current_hunk = DiffParser._parse_hunk_header(line)
-                current_hunk_lines = []
 
             elif current_hunk is not None:
-                current_hunk_lines.append(line)
+                current_hunk.lines.append(line)
 
         if current_file is not None and current_hunk is not None:
             current_file.hunks.append(current_hunk)
@@ -100,9 +96,12 @@ class DiffParser:
         for file in files:
             line_numbers: set[int] = set()
             for hunk in file.hunks:
-                for i, line in enumerate(hunk.lines):
+                current_new_line = hunk.new_start
+                for line in hunk.lines:
                     if line.startswith("+") or line.startswith("-"):
-                        line_numbers.add(hunk.new_start + i)
+                        line_numbers.add(current_new_line)
+                    if not line.startswith("-"):
+                        current_new_line += 1
 
             if line_numbers:
                 changed_lines[file.new_path or file.old_path] = sorted(line_numbers)

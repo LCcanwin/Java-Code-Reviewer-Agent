@@ -1,6 +1,7 @@
 """FastAPI application for Java Code Reviewer web interface."""
 
 import os
+import asyncio
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException
@@ -33,7 +34,13 @@ async def review_pr(request: ReviewRequest):
     """Run code review and return results."""
     try:
         from .main import run_review
-        result = run_review(request.pr_url, request.mode)
+
+        # Run in thread pool to avoid blocking
+        loop = asyncio.get_event_loop()
+        result = await asyncio.wait_for(
+            loop.run_in_executor(None, run_review, request.pr_url, request.mode),
+            timeout=180.0
+        )
         issues = result.get("issues", [])
 
         return {
@@ -56,6 +63,8 @@ async def review_pr(request: ReviewRequest):
             "markdown_report": result.get("markdown_report", ""),
             "error": result.get("error"),
         }
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Review timed out after 180 seconds")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

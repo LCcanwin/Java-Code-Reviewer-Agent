@@ -131,6 +131,46 @@
             to { transform: rotate(360deg); }
         }
 
+        .thinking-steps {
+            text-align: left;
+            max-width: 300px;
+            margin: 20px auto 0;
+            font-size: 14px;
+        }
+
+        .step {
+            padding: 6px 0;
+            color: #718096;
+            transition: all 0.3s;
+        }
+
+        .step.active {
+            color: #667eea;
+            font-weight: 500;
+        }
+
+        .step.done {
+            color: #48bb78;
+        }
+
+        .step-dot {
+            margin-right: 8px;
+            font-size: 10px;
+        }
+
+        .step.active .step-dot {
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .step-text::after {
+            content: '';
+        }
+
         .results {
             display: none;
         }
@@ -315,7 +355,14 @@
 
             <div class="loading" id="loading">
                 <div class="spinner"></div>
-                <p>正在审查代码，请稍候...</p>
+                <p id="loadingText">正在审查代码，请稍候...</p>
+                <div class="thinking-steps" id="thinkingSteps">
+                    <div class="step" id="step1"><span class="step-dot">●</span> <span class="step-text">解析 PR 链接</span></div>
+                    <div class="step" id="step2"><span class="step-dot">○</span> <span class="step-text">获取代码变更</span></div>
+                    <div class="step" id="step3"><span class="step-dot">○</span> <span class="step-text">检索相关规范</span></div>
+                    <div class="step" id="step4"><span class="step-dot">○</span> <span class="step-text">分析代码问题</span></div>
+                    <div class="step" id="step5"><span class="step-dot">○</span> <span class="step-text">生成审查报告</span></div>
+                </div>
             </div>
 
             <div class="results" id="results">
@@ -343,15 +390,26 @@
             loading.classList.add('show');
             results.classList.remove('show');
 
+            // Reset and start step animation
+            resetSteps();
+            const stepInterval = animateSteps();
+
             try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 180000);
+
                 const response = await fetch('/api/review', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({ pr_url: prUrl, mode }),
+                    signal: controller.signal,
                 });
 
+                clearTimeout(timeoutId);
+                clearInterval(stepInterval);
+                completeAllSteps();
                 const data = await response.json();
 
                 if (!response.ok) {
@@ -360,13 +418,73 @@
 
                 displayResults(data);
             } catch (error) {
+                clearInterval(stepInterval);
                 const issuesList = document.getElementById('issuesList');
-                issuesList.innerHTML = `<div class="error-message"><strong>错误：</strong>${error.message}</div>`;
+                if (error.name === 'AbortError') {
+                    issuesList.innerHTML = `<div class="error-message"><strong>错误：</strong>审查超时（180秒），请稍后重试或减少PR大小</div>`;
+                } else {
+                    issuesList.innerHTML = `<div class="error-message"><strong>错误：</strong>${error.message}</div>`;
+                }
             } finally {
                 btn.disabled = false;
                 loading.classList.remove('show');
                 results.classList.add('show');
             }
+        }
+
+        function resetSteps() {
+            for (let i = 1; i <= 5; i++) {
+                const step = document.getElementById('step' + i);
+                if (step) {
+                    step.className = 'step';
+                    step.querySelector('.step-dot').textContent = '○';
+                }
+            }
+        }
+
+        function animateSteps() {
+            let currentStep = 0;
+            const steps = ['step1', 'step2', 'step3', 'step4', 'step5'];
+            const loadingTexts = [
+                '正在解析 PR 链接...',
+                '正在获取代码变更...',
+                '正在检索相关规范...',
+                '正在分析代码问题...',
+                '正在生成审查报告...'
+            ];
+
+            return setInterval(() => {
+                if (currentStep < steps.length) {
+                    // Mark previous step as done
+                    if (currentStep > 0) {
+                        const prevStep = document.getElementById(steps[currentStep - 1]);
+                        if (prevStep) {
+                            prevStep.className = 'step done';
+                            prevStep.querySelector('.step-dot').textContent = '●';
+                        }
+                    }
+                    // Mark current step as active
+                    const step = document.getElementById(steps[currentStep]);
+                    if (step) {
+                        step.className = 'step active';
+                        step.querySelector('.step-dot').textContent = '●';
+                    }
+                    // Update loading text
+                    document.getElementById('loadingText').textContent = loadingTexts[currentStep];
+                    currentStep++;
+                }
+            }, 3000);
+        }
+
+        function completeAllSteps() {
+            for (let i = 1; i <= 5; i++) {
+                const step = document.getElementById('step' + i);
+                if (step) {
+                    step.className = 'step done';
+                    step.querySelector('.step-dot').textContent = '●';
+                }
+            }
+            document.getElementById('loadingText').textContent = '审查完成！';
         }
 
         function displayResults(data) {

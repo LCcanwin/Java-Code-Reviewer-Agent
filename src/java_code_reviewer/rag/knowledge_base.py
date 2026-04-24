@@ -1,5 +1,6 @@
 """Knowledge base for RAG-based context retrieval."""
 
+import logging
 from typing import Optional
 
 import faiss
@@ -8,6 +9,8 @@ from langchain_openai import OpenAIEmbeddings
 
 from ..config import get_config
 from .alibaba_standards import ALIBABA_STANDARDS, AlibabaStandard
+
+logger = logging.getLogger(__name__)
 
 
 class KnowledgeBase:
@@ -25,6 +28,7 @@ class KnowledgeBase:
         self._rule_texts: list[str] = []
         self._rule_ids: list[str] = []
         self._built = False
+        self._embedding_failed = False
 
     def build_index(self) -> None:
         """Build FAISS index from Alibaba standards."""
@@ -37,14 +41,19 @@ class KnowledgeBase:
         ]
         self._rule_ids = [rule.rule_id for rule in self._rules]
 
-        embeddings = self._embedding_model.embed_documents(self._rule_texts)
-        embeddings_array = np.array(embeddings).astype("float32")
+        try:
+            embeddings = self._embedding_model.embed_documents(self._rule_texts)
+            embeddings_array = np.array(embeddings).astype("float32")
 
-        dimension = embeddings_array.shape[1]
-        self._index = faiss.IndexFlatL2(dimension)
-        self._index.add(embeddings_array)
+            dimension = embeddings_array.shape[1]
+            self._index = faiss.IndexFlatL2(dimension)
+            self._index.add(embeddings_array)
 
-        self._built = True
+            self._built = True
+        except Exception as e:
+            logger.warning(f"Failed to build embedding index: {e}, using default rules")
+            self._embedding_failed = True
+            self._built = True
 
     def _rule_to_text(self, rule: AlibabaStandard) -> str:
         """Convert a rule to searchable text."""
@@ -65,15 +74,23 @@ class KnowledgeBase:
         if not self._built:
             self.build_index()
 
-        query_embedding = self._embedding_model.embed_query(query)
-        query_vector = np.array([query_embedding]).astype("float32")
+        # If embedding failed, return default rules
+        if self._embedding_failed or self._index is None:
+            return self._rules[:top_k] if self._rules else []
 
-        k = min(top_k, len(self._rules))
-        distances, indices = self._index.search(query_vector, k)
+        try:
+            query_embedding = self._embedding_model.embed_query(query)
+            query_vector = np.array([query_embedding]).astype("float32")
 
-        results = []
-        for idx in indices[0][:k]:
-            if idx < len(self._rules):
-                results.append(self._rules[idx])
+            k = min(top_k, len(self._rules))
+            distances, indices = self._index.search(query_vector, k)
 
-        return results
+            results = []
+            for idx in indices[0][:k]:
+                if idx < len(self._rules):
+                    results.append(self._rules[idx])
+
+            return results
+        except Exception as e:
+            logger.warning(f"Embedding query failed: {e}, returning default rules")
+            return self._rules[:top_k] if self._rules else []
