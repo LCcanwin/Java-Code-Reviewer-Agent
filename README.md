@@ -1,6 +1,8 @@
 # Java-Code-Reviewer-Agent
 
-基于 LangGraph 的自动化 Java 代码评审系统，依据阿里巴巴 Java 开发规范（华山版/泰山版）对 Pull Request 进行评审。
+基于 LangGraph 的自动化 Java 代码评审系统（Test2 分支测试）
+
+依据阿里巴巴 Java 开发规范（华山版/泰山版）对 Pull Request 进行评审。
 
 ## 功能特性
 
