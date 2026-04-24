@@ -196,7 +196,7 @@ rag:
 **审查进行中：**
 ![Pending](assets/agent_pending.png)
 
-**审查成功（发现问题）：**
+**审查成功（未发现问题）：**
 ![Success](assets/agent_success.png)
 
 **审查完成（含错误结果）：**
