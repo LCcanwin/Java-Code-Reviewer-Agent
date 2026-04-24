@@ -189,42 +189,18 @@ rag:
 
 ## 使用方式
 
-### Python API
-
-```python
-from java_code_reviewer.main import run_review
-
-# 审计模式（默认）
-result = run_review(
-    "https://github.com/org/repo/pull/123",
-    mode="audit_only"
-)
-
-# 自动修复模式
-result = run_review(
-    "https://github.com/org/repo/pull/123",
-    mode="autofix"
-)
-
-# 访问结果
-print(result["markdown_report"])    # Markdown 报告
-print(result["issues"])            # 问题列表
-print(result["patch_commit_sha"])   # 提交 SHA（仅 autofix 模式）
-```
-
 ### Web 界面
 
 启动 FastAPI Web 服务，在浏览器中可视化查看审查结果：
 
-![前端界面](agent.png)
+**审查进行中：**
+![Pending](assets/agent_pending.png)
 
-```bash
-# 启动服务
-PYTHONPATH=src python3 -c "from java_code_reviewer.api import app; import uvicorn; uvicorn.run(app, host='0.0.0.0', port=8000)"
+**审查成功（发现问题）：**
+![Success](assets/agent_success.png)
 
-# 或使用包入口
-PYTHONPATH=src python3 -m java_code_reviewer.web
-```
+**审查完成（含错误结果）：**
+![Error](assets/agent_error.png)
 
 服务启动后访问 http://localhost:8000
 
