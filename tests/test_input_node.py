@@ -26,6 +26,15 @@ class TestParsePrUrl:
         assert repo == "myrepo"
         assert pr_number == 42
 
+    def test_gitlab_nested_group_url_parsed(self):
+        provider, owner, repo, pr_number = parse_pr_url(
+            "https://gitlab.com/platform/backend/myrepo/-/merge_requests/42/diffs"
+        )
+        assert provider == "gitlab"
+        assert owner == "platform/backend"
+        assert repo == "myrepo"
+        assert pr_number == 42
+
     def test_invalid_url_returns_none(self):
         provider, owner, repo, pr_number = parse_pr_url("not-a-url")
         assert provider is None

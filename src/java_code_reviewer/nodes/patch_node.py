@@ -86,6 +86,7 @@ def _push_patches(state: ReviewState, patch_files: dict[str, str]) -> str:
             branch_name=branch_name,
             patch_files=patch_files,
             message=f"fix: Apply Alibaba standards fixes",
+            provider=state["provider"],
         )
         return commit_sha
     except Exception as e:

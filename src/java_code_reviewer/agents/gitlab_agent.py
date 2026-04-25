@@ -25,11 +25,13 @@ class GitLabAgent(PRAgent):
         diff_content = ""
         changed_files = []
 
-        changes = mr.changes
+        changes_data = mr.changes()
+        changes = changes_data.get("changes", []) if isinstance(changes_data, dict) else []
         for change in changes:
             if isinstance(change, dict):
                 diff_content += change.get("diff", "") + "\n"
-                changed_files.append(change.get("new_path", ""))
+                if new_path := change.get("new_path"):
+                    changed_files.append(new_path)
 
         return PRMetadata(
             repo_owner=repo_owner,

@@ -6,7 +6,7 @@ from ..state.review_state import ReviewMode, ReviewState
 def option_router_node(state: ReviewState) -> ReviewState:
     """Route to report or patch node based on review mode."""
     if state.get("error"):
-        state["route_decision"] = None
+        state["route_decision"] = "report"
         return state
 
     mode = state["mode"]

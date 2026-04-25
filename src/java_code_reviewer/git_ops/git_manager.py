@@ -1,6 +1,6 @@
 """Git operations manager using GitPython."""
 
-import os
+import shutil
 import tempfile
 from pathlib import Path
 from typing import Optional
@@ -59,23 +59,35 @@ class GitManager:
             repo_url = f"https://github.com/{repo_owner}/{repo_name}.git"
         clone_dir = self.clone_repo(repo_url)
 
-        repo = Repo(clone_dir)
+        try:
+            repo = Repo(clone_dir)
 
-        git = repo.git
-        git.checkout("-b", branch_name)
+            git = repo.git
+            git.checkout("-b", branch_name)
 
-        for filepath, content in patch_files.items():
-            full_path = Path(clone_dir) / filepath
-            full_path.parent.mkdir(parents=True, exist_ok=True)
-            full_path.write_text(content)
-            git.add(filepath)
+            clone_root = Path(clone_dir).resolve()
+            for filepath, content in patch_files.items():
+                full_path = (clone_root / filepath).resolve()
+                try:
+                    full_path.relative_to(clone_root)
+                except ValueError as exc:
+                    raise ValueError(f"Patch file escapes repository: {filepath}") from exc
 
-        commit = git.commit("-m", message)
-        remote_url = repo.remotes.origin.url.replace("https://", f"https://{get_config().github_token}@")
-        repo.remotes.origin.set_url(remote_url)
-        git.push("-u", "origin", branch_name)
+                full_path.parent.mkdir(parents=True, exist_ok=True)
+                full_path.write_text(content)
+                git.add(filepath)
 
-        return commit.hexsha
+            commit = git.commit("-m", message)
+            token = get_config().gitlab_token if provider == "gitlab" else get_config().github_token
+            if token:
+                username = "oauth2" if provider == "gitlab" else "x-access-token"
+                remote_url = repo.remotes.origin.url.replace("https://", f"https://{username}:{token}@")
+                repo.remotes.origin.set_url(remote_url)
+            git.push("-u", "origin", branch_name)
+
+            return commit.hexsha
+        finally:
+            shutil.rmtree(clone_dir, ignore_errors=True)
 
     def apply_patch(self, repo_dir: str, patch_content: str) -> None:
         """Apply a patch to a cloned repository."""

@@ -12,17 +12,20 @@ GITHUB_PATTERN = re.compile(
     r"https?://(?:www\.)?github\.com/(?P<owner>[^/]+)/(?P<repo>[^/]+)/pull/(?P<pr>\d+)"
 )
 GITLAB_PATTERN = re.compile(
-    r"https?://(?:www\.)?gitlab\.com/(?P<owner>[^/]+)/(?P<repo>[^/]+)/-/merge_requests/(?P<pr>\d+)"
+    r"https?://(?:www\.)?gitlab\.com/(?P<project>.+?)/-/merge_requests/(?P<pr>\d+)(?:[/?#].*)?$"
 )
 
 
-def parse_pr_url(pr_url: str) -> Optional[Tuple[Literal["github", "gitlab"], str, str, int]]:
+def parse_pr_url(pr_url: str) -> Tuple[Optional[Literal["github", "gitlab"]], str, str, int]:
     """Parse PR URL and return (provider, owner, repo, pr_number)."""
     if match := GITHUB_PATTERN.match(pr_url):
         return "github", match.group("owner"), match.group("repo"), int(match.group("pr"))
     if match := GITLAB_PATTERN.match(pr_url):
-        return "gitlab", match.group("owner"), match.group("repo"), int(match.group("pr"))
-    return None
+        project_path = match.group("project").strip("/")
+        owner, _, repo = project_path.rpartition("/")
+        if owner and repo:
+            return "gitlab", owner, repo, int(match.group("pr"))
+    return None, "", "", 0
 
 
 def check_scope_limit(provider: str, owner: str, repo: str) -> bool:

@@ -17,6 +17,13 @@ def report_node(state: ReviewState) -> ReviewState:
     """Generate Markdown report from review issues."""
     issues = state.get("issues", [])
 
+    if state.get("error") and not issues:
+        state["markdown_report"] = (
+            "# Java Code Review Report\n\n"
+            f"Review failed: {state['error']}"
+        )
+        return state
+
     if not issues:
         state["markdown_report"] = "# Java Code Review Report\n\nNo issues found."
         return state
