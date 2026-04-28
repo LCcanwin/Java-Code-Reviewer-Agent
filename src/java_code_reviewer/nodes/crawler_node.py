@@ -27,6 +27,10 @@ def crawler_node(state: ReviewState) -> ReviewState:
         state["changed_files"] = metadata.changed_files
         state["pr_title"] = metadata.title
         state["pr_description"] = metadata.description
+        state["base_branch"] = metadata.base_branch
+        state["head_branch"] = metadata.head_branch
+        state["head_repo_owner"] = metadata.head_repo_owner
+        state["head_repo_name"] = metadata.head_repo_name
 
     except Exception as e:
         state["error"] = f"Failed to fetch PR: {str(e)}"

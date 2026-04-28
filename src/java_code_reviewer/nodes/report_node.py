@@ -28,12 +28,12 @@ def report_node(state: ReviewState) -> ReviewState:
         state["markdown_report"] = "# Java Code Review Report\n\nNo issues found."
         return state
 
-    sorted_issues = sorted(issues, key=lambda i: SEVERITY_ORDER.index(i["severity"]))
+    sorted_issues = sorted(issues, key=lambda i: _severity_rank(i["severity"]))
 
     lines = [
         "# Java Code Review Report",
-        f"\n**PR**: {state.get('pr_title', 'N/A')}",
-        f"**URL**: {state.get('pr_url', 'N/A')}",
+        f"\n**PR**: {_escape_inline_markdown(str(state.get('pr_title', 'N/A')))}",
+        f"**URL**: {_escape_inline_markdown(str(state.get('pr_url', 'N/A')))}",
         f"**Files Changed**: {len(state.get('changed_files', []))}",
         f"**Total Issues**: {len(issues)}",
         "\n## Issues Summary\n",
@@ -43,10 +43,10 @@ def report_node(state: ReviewState) -> ReviewState:
 
     for issue in sorted_issues:
         emoji = SEVERITY_EMOJI.get(issue["severity"], "[?]")
-        rule_id = issue["rule_id"]
-        filepath = issue["file_path"]
+        rule_id = _escape_table_cell(str(issue["rule_id"]))
+        filepath = _escape_table_cell(str(issue["file_path"]))
         line = issue["line_number"]
-        message = issue["message"].replace("|", "\\|").replace("\n", " ")[:100]
+        message = _escape_table_cell(str(issue["message"]))[:100]
 
         lines.append(f"| {emoji} | {rule_id} | `{filepath}` | {line} | {message} |")
 
@@ -54,14 +54,37 @@ def report_node(state: ReviewState) -> ReviewState:
 
     for issue in sorted_issues:
         emoji = SEVERITY_EMOJI.get(issue["severity"], "[?]")
-        lines.append(f"### {emoji} {issue['rule_id']}: {issue['file_path']}:{issue['line_number']}\n")
-        lines.append(f"**Message**: {issue['message']}\n")
-        lines.append(f"**Code**:\n```java\n{issue['code_snippet']}\n```\n")
+        rule_id = _escape_inline_markdown(str(issue["rule_id"]))
+        filepath = _escape_inline_markdown(str(issue["file_path"]))
+        message = _escape_inline_markdown(str(issue["message"]))
+        code_snippet = _escape_code_fence(str(issue["code_snippet"]))
+        lines.append(f"### {emoji} {rule_id}: {filepath}:{issue['line_number']}\n")
+        lines.append(f"**Message**: {message}\n")
+        lines.append(f"**Code**:\n````java\n{code_snippet}\n````\n")
 
         if suggestion := issue.get("suggestion"):
-            lines.append(f"**Suggestion**:\n```java\n{suggestion}\n```\n")
+            lines.append(f"**Suggestion**:\n````java\n{_escape_code_fence(str(suggestion))}\n````\n")
 
         lines.append("---\n")
 
     state["markdown_report"] = "\n".join(lines)
     return state
+
+
+def _severity_rank(severity: Severity) -> int:
+    try:
+        return SEVERITY_ORDER.index(severity)
+    except ValueError:
+        return len(SEVERITY_ORDER)
+
+
+def _escape_table_cell(value: str) -> str:
+    return value.replace("|", "\\|").replace("\n", " ").replace("\r", " ")
+
+
+def _escape_inline_markdown(value: str) -> str:
+    return value.replace("\n", " ").replace("\r", " ")
+
+
+def _escape_code_fence(value: str) -> str:
+    return value.replace("````", "` ` ` `")

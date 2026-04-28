@@ -33,3 +33,35 @@ class TestDiffParser:
 
         changed = DiffParser.extract_changed_lines(diff)
         assert "src/Example.java" in changed
+
+    def test_parse_multi_file_diff_keeps_all_hunks(self):
+        diff = """diff --git a/src/A.java b/src/A.java
+--- a/src/A.java
++++ b/src/A.java
+@@ -1,2 +1,2 @@
+-oldA
++newA
+diff --git a/src/B.java b/src/B.java
+--- a/src/B.java
++++ b/src/B.java
+@@ -1,2 +1,2 @@
+-oldB
++newB"""
+
+        files = DiffParser.parse(diff)
+
+        assert len(files) == 2
+        assert [file.new_path for file in files] == ["src/A.java", "src/B.java"]
+        assert all(len(file.hunks) == 1 for file in files)
+
+    def test_extract_changed_lines_ignores_deleted_lines(self):
+        diff = """--- a/src/Example.java
++++ b/src/Example.java
+@@ -10,3 +10,3 @@
+ keep
+-deleted
++added"""
+
+        changed = DiffParser.extract_changed_lines(diff)
+
+        assert changed["src/Example.java"] == [11]

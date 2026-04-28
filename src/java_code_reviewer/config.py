@@ -63,7 +63,7 @@ class Config:
 
     @property
     def llm_api_key(self) -> Optional[str]:
-        return os.getenv("LLM_API_KEY")
+        return os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY")
 
     @property
     def llm_model(self) -> str:

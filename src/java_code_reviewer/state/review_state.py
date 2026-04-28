@@ -50,6 +50,10 @@ class ReviewState(TypedDict):
     repo_owner: str
     repo_name: str
     pr_number: int
+    base_branch: NotRequired[str]
+    head_branch: NotRequired[str]
+    head_repo_owner: NotRequired[str]
+    head_repo_name: NotRequired[str]
 
     # PR content
     diff_content: str

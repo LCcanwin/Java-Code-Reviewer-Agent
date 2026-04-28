@@ -1,7 +1,7 @@
 """FastAPI application for Java Code Reviewer web interface."""
 
-import os
 import asyncio
+import os
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException
@@ -19,7 +19,7 @@ def get_html_path():
 class ReviewRequest(BaseModel):
     """Request model for code review."""
     pr_url: str
-    mode: str = "audit_only"
+    mode: Literal["audit_only", "autofix"] = "audit_only"
 
 
 @app.get("/", response_class=HTMLResponse)

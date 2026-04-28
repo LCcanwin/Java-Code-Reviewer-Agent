@@ -1,7 +1,6 @@
 """Reviewer node - LLM review against Alibaba standards."""
 
 import json
-from typing import Any
 
 from ..llm.client import LLMClient
 from ..llm.prompts import REVIEW_PROMPT, SYSTEM_PROMPT
@@ -60,19 +59,18 @@ def _format_context(context: dict[str, str]) -> str:
 
 def _parse_issues(response: str) -> list[Issue]:
     """Parse LLM response into Issue list."""
-    import re
     import logging
 
     logger = logging.getLogger(__name__)
     issues: list[Issue] = []
 
-    json_match = re.search(r"\[[\s\S]*?\]", response)
-    if not json_match:
+    json_text = _extract_json_array(response)
+    if not json_text:
         logger.warning("No JSON array found in LLM response, returning empty issues")
         return issues
 
     try:
-        parsed = json.loads(json_match.group())
+        parsed = json.loads(json_text)
         if not isinstance(parsed, list):
             logger.warning("Parsed JSON is not a list, returning empty issues")
             return issues
@@ -112,3 +110,41 @@ def _parse_issues(response: str) -> list[Issue]:
         logger.warning(f"JSON parsing failed: {e}, returning empty issues")
 
     return issues
+
+
+def _extract_json_array(response: str) -> str:
+    """Extract the first complete JSON array from an LLM response."""
+    import re
+
+    fenced_match = re.search(r"```(?:json)?\s*(\[[\s\S]*?\])\s*```", response)
+    if fenced_match:
+        return fenced_match.group(1)
+
+    start = response.find("[")
+    if start == -1:
+        return ""
+
+    in_string = False
+    escape = False
+    depth = 0
+    for idx in range(start, len(response)):
+        char = response[idx]
+        if escape:
+            escape = False
+            continue
+        if char == "\\":
+            escape = True
+            continue
+        if char == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if char == "[":
+            depth += 1
+        elif char == "]":
+            depth -= 1
+            if depth == 0:
+                return response[start : idx + 1]
+
+    return ""

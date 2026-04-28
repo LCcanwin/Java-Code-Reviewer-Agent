@@ -84,14 +84,12 @@ def _format_issues(issues: list[Issue]) -> str:
 
 def _parse_feedback_response(response: str) -> tuple[bool, str]:
     """Parse LLM feedback response into approved flag and message."""
-    import re
-
-    json_match = re.search(r"\{[\s\S]*?\}", response)
-    if not json_match:
+    json_text = _extract_json_object(response)
+    if not json_text:
         return False, "Could not parse feedback response"
 
     try:
-        parsed = json.loads(json_match.group())
+        parsed = json.loads(json_text)
         if not isinstance(parsed, dict):
             return False, "Parsed response is not a valid dictionary"
 
@@ -114,3 +112,41 @@ def _parse_feedback_response(response: str) -> tuple[bool, str]:
 
     except json.JSONDecodeError:
         return False, "Could not parse feedback JSON"
+
+
+def _extract_json_object(response: str) -> str:
+    """Extract the first complete JSON object from an LLM response."""
+    import re
+
+    fenced_match = re.search(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", response)
+    if fenced_match:
+        return fenced_match.group(1)
+
+    start = response.find("{")
+    if start == -1:
+        return ""
+
+    in_string = False
+    escape = False
+    depth = 0
+    for idx in range(start, len(response)):
+        char = response[idx]
+        if escape:
+            escape = False
+            continue
+        if char == "\\":
+            escape = True
+            continue
+        if char == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return response[start : idx + 1]
+
+    return ""

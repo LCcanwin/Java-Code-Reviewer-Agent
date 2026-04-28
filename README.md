@@ -184,7 +184,7 @@ rag:
 |------|------|------|
 | `GITHUB_TOKEN` | GitHub PR 必需 | GitHub 个人访问令牌 |
 | `GITLAB_TOKEN` | GitLab MR 必需 | GitLab 个人访问令牌 |
-| `OPENAI_API_KEY` | OpenAI 必需 | OpenAI API Key |
+| `LLM_API_KEY` | LLM 必需 | OpenAI/Anthropic API Key（兼容 `OPENAI_API_KEY`） |
 | `SCOPE_LIMIT` | 否 | 允许的仓库范围白名单，逗号分隔（如："org/repo1,org/repo2"） |
 
 ## 使用方式
@@ -230,22 +230,24 @@ jobs:
       - name: Run code review
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          LLM_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PYTHONPATH: src
         run: |
           python -c "from java_code_reviewer.main import run_review; \
             result = run_review('${{ github.event.pull_request.html_url }}'); \
-            print(result['markdown_report'])"
+            open('review_result.md', 'w').write(result['markdown_report'])"
 
       - name: Create review comment
         if: always()
         uses: actions/github-script@v7
         with:
           script: |
+            const fs = require('fs');
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: process.env.REVIEW_RESULT
+              body: fs.readFileSync('review_result.md', 'utf8')
             })
 ```
 

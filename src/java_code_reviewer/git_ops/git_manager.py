@@ -51,13 +51,11 @@ class GitManager:
         patch_files: dict[str, str],
         message: str,
         provider: str = "github",
+        source_branch: Optional[str] = None,
     ) -> str:
         """Create a commit with patch files and return commit SHA."""
-        if provider == "gitlab":
-            repo_url = f"https://gitlab.com/{repo_owner}/{repo_name}.git"
-        else:
-            repo_url = f"https://github.com/{repo_owner}/{repo_name}.git"
-        clone_dir = self.clone_repo(repo_url)
+        repo_url = self._repo_url(provider, repo_owner, repo_name)
+        clone_dir = self.clone_repo(repo_url, branch=source_branch)
 
         try:
             repo = Repo(clone_dir)
@@ -74,10 +72,13 @@ class GitManager:
                     raise ValueError(f"Patch file escapes repository: {filepath}") from exc
 
                 full_path.parent.mkdir(parents=True, exist_ok=True)
-                full_path.write_text(content)
-                git.add(filepath)
+                full_path.write_text(content, encoding="utf-8")
+                git.add("--", filepath)
 
-            commit = git.commit("-m", message)
+            if not repo.is_dirty(untracked_files=True):
+                return repo.head.commit.hexsha
+
+            git.commit("-m", message)
             token = get_config().gitlab_token if provider == "gitlab" else get_config().github_token
             if token:
                 username = "oauth2" if provider == "gitlab" else "x-access-token"
@@ -85,7 +86,34 @@ class GitManager:
                 repo.remotes.origin.set_url(remote_url)
             git.push("-u", "origin", branch_name)
 
-            return commit.hexsha
+            return repo.head.commit.hexsha
+        finally:
+            shutil.rmtree(clone_dir, ignore_errors=True)
+
+    def read_files(
+        self,
+        repo_owner: str,
+        repo_name: str,
+        file_paths: list[str],
+        provider: str = "github",
+        branch: Optional[str] = None,
+    ) -> dict[str, str]:
+        """Read files from a repository branch."""
+        repo_url = self._repo_url(provider, repo_owner, repo_name)
+        clone_dir = self.clone_repo(repo_url, branch=branch)
+
+        try:
+            clone_root = Path(clone_dir).resolve()
+            contents: dict[str, str] = {}
+            for filepath in file_paths:
+                full_path = (clone_root / filepath).resolve()
+                try:
+                    full_path.relative_to(clone_root)
+                except ValueError as exc:
+                    raise ValueError(f"Requested file escapes repository: {filepath}") from exc
+                if full_path.is_file():
+                    contents[filepath] = full_path.read_text(encoding="utf-8")
+            return contents
         finally:
             shutil.rmtree(clone_dir, ignore_errors=True)
 
@@ -96,3 +124,8 @@ class GitManager:
         patch_file.write_text(patch_content)
         git.apply(patch_file)
         patch_file.unlink()
+
+    def _repo_url(self, provider: str, repo_owner: str, repo_name: str) -> str:
+        if provider == "gitlab":
+            return f"https://gitlab.com/{repo_owner}/{repo_name}.git"
+        return f"https://github.com/{repo_owner}/{repo_name}.git"

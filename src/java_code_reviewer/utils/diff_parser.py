@@ -35,13 +35,25 @@ class DiffParser:
         current_file: Optional[DiffFile] = None
         current_hunk: Optional[DiffHunk] = None
 
-        for line in diff_content.split("\n"):
-            if line.startswith("--- ") or line.startswith("diff "):
-                if current_file is not None and current_hunk is not None:
-                    files.append(current_file)
+        def flush_current_file() -> None:
+            nonlocal current_file, current_hunk
+            if current_file is None:
+                return
+            if current_hunk is not None:
+                current_file.hunks.append(current_hunk)
+            files.append(current_file)
+            current_file = None
+            current_hunk = None
 
+        for line in diff_content.split("\n"):
+            if line.startswith("diff "):
+                flush_current_file()
+                current_file = DiffFile(old_path="", new_path="", hunks=[])
+            elif line.startswith("--- "):
+                if current_file is None:
+                    current_file = DiffFile(old_path="", new_path="", hunks=[])
                 old_path = DiffParser._parse_old_path(line)
-                current_file = DiffFile(old_path=old_path, new_path="", hunks=[])
+                current_file.old_path = old_path
                 current_hunk = None
 
             elif line.startswith("+++ "):
@@ -57,9 +69,7 @@ class DiffParser:
             elif current_hunk is not None:
                 current_hunk.lines.append(line)
 
-        if current_file is not None and current_hunk is not None:
-            current_file.hunks.append(current_hunk)
-            files.append(current_file)
+        flush_current_file()
 
         return files
 
@@ -98,7 +108,7 @@ class DiffParser:
             for hunk in file.hunks:
                 current_new_line = hunk.new_start
                 for line in hunk.lines:
-                    if line.startswith("+") or line.startswith("-"):
+                    if line.startswith("+") and not line.startswith("+++"):
                         line_numbers.add(current_new_line)
                     if not line.startswith("-"):
                         current_new_line += 1

@@ -17,6 +17,8 @@ class PRMetadata:
     changed_files: list[str]
     base_branch: str
     head_branch: str
+    head_repo_owner: str
+    head_repo_name: str
 
 
 class PRAgent(ABC):

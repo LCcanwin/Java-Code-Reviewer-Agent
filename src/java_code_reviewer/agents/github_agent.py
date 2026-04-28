@@ -1,10 +1,10 @@
 """GitHub PR agent using PyGithub."""
 
-import logging
 import urllib.request
+import logging
 from typing import Optional
 
-from github import Github, PullRequest
+from github import Github
 from github.GithubException import GithubException
 
 from ..config import get_config
@@ -39,6 +39,8 @@ class GitHubAgent(PRAgent):
             changed_files=changed_files,
             base_branch=pr.base.ref,
             head_branch=pr.head.ref,
+            head_repo_owner=pr.head.repo.owner.login if pr.head.repo else repo_owner,
+            head_repo_name=pr.head.repo.name if pr.head.repo else repo_name,
         )
 
     def validate_token(self) -> bool:

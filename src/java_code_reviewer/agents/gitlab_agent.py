@@ -43,6 +43,8 @@ class GitLabAgent(PRAgent):
             changed_files=changed_files,
             base_branch=mr.target_branch,
             head_branch=mr.source_branch,
+            head_repo_owner=repo_owner,
+            head_repo_name=repo_name,
         )
 
     def validate_token(self) -> bool:
