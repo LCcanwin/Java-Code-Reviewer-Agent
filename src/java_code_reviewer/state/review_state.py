@@ -22,6 +22,46 @@ class Severity(str, Enum):
     INFO = "info"  # Informational
 
 
+class RunStatus(str, Enum):
+    """Overall review run status."""
+
+    RUNNING = "running"
+    SUCCESS = "success"
+    FAILED = "failed"
+    PARTIAL_SUCCESS = "partial_success"
+
+
+class ErrorType(str, Enum):
+    """Normalized error categories for recovery and monitoring."""
+
+    VALIDATION_ERROR = "VALIDATION_ERROR"
+    PROVIDER_AUTH_ERROR = "PROVIDER_AUTH_ERROR"
+    PROVIDER_RATE_LIMIT = "PROVIDER_RATE_LIMIT"
+    PROVIDER_NOT_FOUND = "PROVIDER_NOT_FOUND"
+    PROVIDER_NETWORK_ERROR = "PROVIDER_NETWORK_ERROR"
+    DIFF_FETCH_ERROR = "DIFF_FETCH_ERROR"
+    RAG_ERROR = "RAG_ERROR"
+    LLM_ERROR = "LLM_ERROR"
+    LLM_PARSE_ERROR = "LLM_PARSE_ERROR"
+    FEEDBACK_REJECTED = "FEEDBACK_REJECTED"
+    PATCH_FILE_READ_ERROR = "PATCH_FILE_READ_ERROR"
+    PATCH_GENERATION_ERROR = "PATCH_GENERATION_ERROR"
+    PATCH_PUSH_ERROR = "PATCH_PUSH_ERROR"
+    SECURITY_ERROR = "SECURITY_ERROR"
+    UNKNOWN_ERROR = "UNKNOWN_ERROR"
+
+
+class RecoveryActionType(str, Enum):
+    """Allowed recovery actions."""
+
+    RETRY = "retry"
+    RETRY_WITH_REPAIR_PROMPT = "retry_with_repair_prompt"
+    FALLBACK_AUDIT_ONLY = "fallback_audit_only"
+    SKIP_NODE = "skip_node"
+    PARTIAL_SUCCESS = "partial_success"
+    FAIL = "fail"
+
+
 class Issue(TypedDict):
     """A single code review issue."""
 
@@ -34,8 +74,50 @@ class Issue(TypedDict):
     suggestion: NotRequired[str]
 
 
+class NodeResult(TypedDict):
+    """Execution metadata for one graph node."""
+
+    status: Literal["success", "failed", "skipped", "retried"]
+    duration_ms: int
+    retry_count: int
+    error_type: NotRequired[str]
+    error_message: NotRequired[str]
+
+
+class ReviewError(TypedDict):
+    """Normalized error captured during a review run."""
+
+    node: str
+    error_type: str
+    message: str
+    recoverable: bool
+
+
+class RecoveryAction(TypedDict):
+    """A recorded recovery decision."""
+
+    node: str
+    action: str
+    reason: str
+    retry_count: int
+
+
 class ReviewState(TypedDict):
     """LangGraph state for the code review pipeline."""
+
+    # Run observability
+    run_id: NotRequired[str]
+    status: NotRequired[RunStatus]
+    current_node: NotRequired[str]
+    node_results: NotRequired[dict[str, NodeResult]]
+    errors: NotRequired[list[ReviewError]]
+    recovery_actions: NotRequired[list[RecoveryAction]]
+    failed_node: NotRequired[str]
+    failure_type: NotRequired[str]
+    failure_message: NotRequired[str]
+    pending_recovery: NotRequired[bool]
+    recovery_action: NotRequired[str]
+    repair_prompt: NotRequired[str]
 
     # Input
     pr_url: str

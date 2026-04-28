@@ -9,6 +9,7 @@ from .report_node import report_node
 from .patch_node import patch_node
 from .planner_node import planner_node
 from .feedback_node import feedback_node
+from .failure_handler import failure_handler_node
 
 __all__ = [
     "input_node",
@@ -20,4 +21,5 @@ __all__ = [
     "patch_node",
     "planner_node",
     "feedback_node",
+    "failure_handler_node",
 ]

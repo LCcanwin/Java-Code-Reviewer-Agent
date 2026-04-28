@@ -14,8 +14,10 @@ from .nodes import (
     report_node,
     reviewer_node,
     feedback_node,
+    failure_handler_node,
 )
-from .state.review_state import ReviewMode, ReviewState
+from .observability import mark_run_finished, wrap_node
+from .state.review_state import ErrorType, ReviewMode, ReviewState, RunStatus
 
 
 MAX_FEEDBACK_ITERATIONS = 1
@@ -24,6 +26,11 @@ MAX_FEEDBACK_ITERATIONS = 1
 def _should_proceed_to_crawler(state: ReviewState) -> bool:
     """Check if we should proceed to crawler after input."""
     return bool(state.get("validated", False))
+
+
+def _has_pending_recovery(state: ReviewState) -> bool:
+    """Return whether the last node failure should be handled."""
+    return bool(state.get("pending_recovery"))
 
 
 def _should_proceed_to_retriever(state: ReviewState) -> bool:
@@ -62,70 +69,122 @@ def _should_proceed_to_router(state: ReviewState) -> bool:
     return state.get("feedback_approved", False)
 
 
+def _route_after_feedback(state: ReviewState) -> str:
+    if _has_pending_recovery(state):
+        return "recover"
+    if _should_retry_review(state):
+        return "retry"
+    if _should_proceed_to_router(state):
+        return "router"
+    state["failed_node"] = "feedback"
+    state["failure_type"] = ErrorType.FEEDBACK_REJECTED.value
+    state["failure_message"] = state.get("feedback_message", "Feedback rejected the review result")
+    state["pending_recovery"] = True
+    state.setdefault("errors", []).append(
+        {
+            "node": "feedback",
+            "error_type": ErrorType.FEEDBACK_REJECTED.value,
+            "message": state["failure_message"],
+            "recoverable": True,
+        }
+    )
+    return "recover"
+
+
 def compile_graph() -> StateGraph:
     """Compile the LangGraph state machine."""
     graph = StateGraph(ReviewState)
 
-    graph.add_node("input", input_node)
-    graph.add_node("crawler", crawler_node)
-    graph.add_node("context_retriever", context_retriever_node)
-    graph.add_node("planner", planner_node)
-    graph.add_node("reviewer", reviewer_node)
-    graph.add_node("feedback", feedback_node)
-    graph.add_node("option_router", option_router_node)
-    graph.add_node("report", report_node)
-    graph.add_node("patch", patch_node)
+    graph.add_node("input", wrap_node("input", input_node))
+    graph.add_node("crawler", wrap_node("crawler", crawler_node))
+    graph.add_node("context_retriever", wrap_node("context_retriever", context_retriever_node))
+    graph.add_node("planner", wrap_node("planner", planner_node))
+    graph.add_node("reviewer", wrap_node("reviewer", reviewer_node))
+    graph.add_node("feedback", wrap_node("feedback", feedback_node))
+    graph.add_node("failure_handler", failure_handler_node)
+    graph.add_node("option_router", wrap_node("option_router", option_router_node))
+    graph.add_node("report", wrap_node("report", report_node))
+    graph.add_node("patch", wrap_node("patch", patch_node))
 
     graph.set_entry_point("input")
 
     graph.add_conditional_edges(
         "input",
-        _should_proceed_to_crawler,
+        lambda state: "recover" if _has_pending_recovery(state) else "crawler" if _should_proceed_to_crawler(state) else "end",
         {
-            True: "crawler",
-            False: END,
+            "recover": "failure_handler",
+            "crawler": "crawler",
+            "end": END,
         },
     )
 
     graph.add_conditional_edges(
         "crawler",
-        _should_proceed_to_retriever,
+        lambda state: "recover" if _has_pending_recovery(state) else "retriever" if _should_proceed_to_retriever(state) else "end",
         {
-            True: "context_retriever",
-            False: END,
+            "recover": "failure_handler",
+            "retriever": "context_retriever",
+            "end": END,
         },
     )
 
     graph.add_conditional_edges(
         "context_retriever",
-        _should_proceed_to_planner,
+        lambda state: (
+            "recover"
+            if _has_pending_recovery(state)
+            else "planner"
+            if _should_proceed_to_planner(state)
+            else "reviewer"
+        ),
         {
-            True: "planner",
-            False: "reviewer",  # In audit_only, skip planner and go directly to reviewer
+            "recover": "failure_handler",
+            "planner": "planner",
+            "reviewer": "reviewer",
         },
     )
 
     graph.add_conditional_edges(
         "planner",
-        _should_proceed_to_reviewer,
+        lambda state: "recover" if _has_pending_recovery(state) else "reviewer" if _should_proceed_to_reviewer(state) else "end",
         {
-            True: "reviewer",
-            False: END,
+            "recover": "failure_handler",
+            "reviewer": "reviewer",
+            "end": END,
         },
     )
 
-    graph.add_edge("reviewer", "feedback")
+    graph.add_conditional_edges(
+        "reviewer",
+        lambda state: "recover" if _has_pending_recovery(state) else "feedback",
+        {
+            "recover": "failure_handler",
+            "feedback": "feedback",
+        },
+    )
 
     graph.add_conditional_edges(
         "feedback",
-        lambda state: (
-            "retry"
-            if _should_retry_review(state)
-            else "router" if _should_proceed_to_router(state) else "end"
-        ),
+        _route_after_feedback,
         {
+            "recover": "failure_handler",
             "retry": "reviewer",
             "router": "option_router",
+        },
+    )
+
+    graph.add_conditional_edges(
+        "failure_handler",
+        _route_after_recovery,
+        {
+            "crawler": "crawler",
+            "context_retriever": "context_retriever",
+            "planner": "planner",
+            "reviewer": "reviewer",
+            "feedback": "feedback",
+            "patch": "patch",
+            "option_router": "option_router",
+            "report": "report",
             "end": END,
         },
     )
@@ -140,9 +199,40 @@ def compile_graph() -> StateGraph:
     )
 
     graph.add_edge("report", END)
-    graph.add_edge("patch", END)
+    graph.add_conditional_edges(
+        "patch",
+        lambda state: "recover" if _has_pending_recovery(state) else "end",
+        {
+            "recover": "failure_handler",
+            "end": END,
+        },
+    )
 
     return graph.compile()
+
+
+def _route_after_recovery(state: ReviewState) -> str:
+    """Route according to the bounded recovery decision."""
+    action = state.get("recovery_action", "")
+    failed_node = state.get("failed_node", "")
+
+    if action in {"retry", "retry_with_repair_prompt"}:
+        return failed_node if failed_node in {"crawler", "planner", "reviewer", "feedback", "patch"} else "end"
+    if action == "skip_node":
+        return _next_node_after_skip(state, failed_node)
+    if action in {"fallback_audit_only", "partial_success", "fail"}:
+        return "report"
+    return "end"
+
+
+def _next_node_after_skip(state: ReviewState, failed_node: str) -> str:
+    if failed_node == "context_retriever":
+        return "reviewer" if state.get("mode") == ReviewMode.AUDIT_ONLY else "planner"
+    if failed_node == "planner":
+        return "reviewer"
+    if failed_node == "feedback":
+        return "option_router" if state.get("mode") == ReviewMode.AUDIT_ONLY else "report"
+    return "report"
 
 
 GRAPH = compile_graph()
@@ -159,6 +249,14 @@ def run_review(pr_url: str, mode: Literal["audit_only", "autofix"] = "audit_only
         ReviewState with review results
     """
     initial_state: ReviewState = {
+        "status": RunStatus.RUNNING,
+        "node_results": {},
+        "errors": [],
+        "recovery_actions": [],
+        "current_node": "",
+        "pending_recovery": False,
+        "recovery_action": "",
+        "repair_prompt": "",
         "pr_url": pr_url,
         "mode": ReviewMode(mode),
         "validated": False,
@@ -184,4 +282,4 @@ def run_review(pr_url: str, mode: Literal["audit_only", "autofix"] = "audit_only
     }
 
     result = GRAPH.invoke(initial_state)
-    return result
+    return mark_run_finished(result)

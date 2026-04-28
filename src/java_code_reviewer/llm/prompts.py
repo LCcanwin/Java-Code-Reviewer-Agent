@@ -90,6 +90,9 @@ PATCH_PROMPT = """## 任务
 {original_files}
 ```
 
+## 恢复重试附加要求
+{repair_prompt}
+
 ## 要求
 针对每个问题，生成修正后的代码。以JSON对象格式返回，key为文件路径，value为修复后的完整文件内容：
 ```json

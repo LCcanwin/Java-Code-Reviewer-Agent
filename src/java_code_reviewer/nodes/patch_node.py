@@ -13,6 +13,7 @@ def patch_node(state: ReviewState) -> ReviewState:
     diff_content = state.get("diff_content", "")
     pr_title = state.get("pr_title", "")
     issues = state.get("issues", [])
+    repair_prompt = state.get("repair_prompt", "")
 
     if not issues:
         state["patch_files"] = {}
@@ -50,6 +51,7 @@ def patch_node(state: ReviewState) -> ReviewState:
                 diff_content=diff_content[:15000],
                 issues=issues_text,
                 original_files=original_files_text,
+                repair_prompt=repair_prompt or "无",
             ),
         },
     ]

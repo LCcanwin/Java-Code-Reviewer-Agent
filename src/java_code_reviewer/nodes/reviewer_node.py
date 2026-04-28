@@ -13,6 +13,7 @@ def reviewer_node(state: ReviewState) -> ReviewState:
     changed_files = state.get("changed_files", [])
     pr_title = state.get("pr_title", "")
     retrieved_context = state.get("retrieved_context", {})
+    repair_prompt = state.get("repair_prompt", "")
 
     if not diff_content:
         state["issues"] = []
@@ -28,7 +29,8 @@ def reviewer_node(state: ReviewState) -> ReviewState:
                 pr_title=pr_title,
                 changed_files=", ".join(changed_files[:20]),
                 diff_content=diff_content[:15000],
-                retrieved_context=context_str or "No specific context retrieved.",
+                retrieved_context=(context_str or "No specific context retrieved.")
+                + (f"\n\n## 恢复重试附加要求\n{repair_prompt}" if repair_prompt else ""),
             ),
         },
     ]

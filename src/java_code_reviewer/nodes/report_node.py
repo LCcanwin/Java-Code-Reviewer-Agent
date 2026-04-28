@@ -17,10 +17,24 @@ def report_node(state: ReviewState) -> ReviewState:
     """Generate Markdown report from review issues."""
     issues = state.get("issues", [])
 
+    if state.get("validation_error") and not issues:
+        state["markdown_report"] = (
+            "# Java Code Review Report\n\n"
+            f"Validation failed: {state['validation_error']}"
+        )
+        return state
+
     if state.get("error") and not issues:
         state["markdown_report"] = (
             "# Java Code Review Report\n\n"
             f"Review failed: {state['error']}"
+        )
+        return state
+
+    if state.get("patch_error") and not issues:
+        state["markdown_report"] = (
+            "# Java Code Review Report\n\n"
+            f"Autofix failed: {state['patch_error']}"
         )
         return state
 
@@ -66,6 +80,19 @@ def report_node(state: ReviewState) -> ReviewState:
             lines.append(f"**Suggestion**:\n````java\n{_escape_code_fence(str(suggestion))}\n````\n")
 
         lines.append("---\n")
+
+    if state.get("patch_error"):
+        lines.append("\n## Autofix Status\n")
+        lines.append(f"Autofix failed: {_escape_inline_markdown(str(state['patch_error']))}\n")
+
+    if state.get("recovery_actions"):
+        lines.append("\n## Recovery Actions\n")
+        for action in state["recovery_actions"]:
+            lines.append(
+                f"- `{_escape_inline_markdown(str(action.get('node', 'unknown')))}`: "
+                f"{_escape_inline_markdown(str(action.get('action', 'unknown')))} - "
+                f"{_escape_inline_markdown(str(action.get('reason', '')))}"
+            )
 
     state["markdown_report"] = "\n".join(lines)
     return state

@@ -42,9 +42,14 @@ async def review_pr(request: ReviewRequest):
             timeout=180.0
         )
         issues = result.get("issues", [])
+        status = result.get("status", "")
+        status_value = status.value if hasattr(status, "value") else status
 
         return {
-            "success": True,
+            "success": status_value != "failed",
+            "run_id": result.get("run_id", ""),
+            "status": status_value,
+            "current_node": result.get("current_node", ""),
             "pr_title": result.get("pr_title", ""),
             "pr_url": result.get("pr_url", ""),
             "total_issues": len(issues),
@@ -61,6 +66,10 @@ async def review_pr(request: ReviewRequest):
                 for i in issues
             ],
             "markdown_report": result.get("markdown_report", ""),
+            "node_results": result.get("node_results", {}),
+            "errors": result.get("errors", []),
+            "recovery_actions": result.get("recovery_actions", []),
+            "patch_error": result.get("patch_error"),
             "error": result.get("error"),
         }
     except asyncio.TimeoutError:
