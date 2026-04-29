@@ -74,3 +74,41 @@ def test_patch_node_reads_original_files_and_filters_unknown_paths():
     )
     assert result["patch_files"] == {"src/Example.java": "class Example { void fixed() {} }"}
     assert result["patch_commit_sha"] == "abc123"
+
+
+def test_patch_node_sets_error_when_llm_returns_no_valid_files():
+    state = _state()
+
+    with patch.object(patch_node_module, "GitManager") as manager_cls:
+        manager = manager_cls.return_value
+        manager.read_files.return_value = {"src/Example.java": "class Example {}"}
+
+        with patch.object(patch_node_module, "LLMClient") as llm_cls:
+            llm = llm_cls.return_value
+            llm.invoke.return_value = """```json
+{
+  "src/Other.java": "class Other {}"
+}
+```"""
+
+            result = patch_node_module.patch_node(state)
+
+    assert result["patch_files"] == {}
+    assert "no valid patch files" in result["patch_error"]
+
+
+def test_push_patch_error_is_redacted():
+    state = _state()
+
+    with patch.object(patch_node_module, "GitManager") as manager_cls:
+        manager = manager_cls.return_value
+        manager.branch_prefix = "java-reviewer/"
+        manager.create_commit.side_effect = RuntimeError(
+            "fatal: https://x-access-token:ghp_secret123@github.com/org/repo.git"
+        )
+
+        commit_sha = patch_node_module._push_patches(state, {"src/Example.java": "class Example {}"})
+
+    assert commit_sha == ""
+    assert "ghp_secret123" not in state["patch_error"]
+    assert "***REDACTED***" in state["patch_error"]

@@ -97,7 +97,7 @@ def _default_recovery_action(
     failed_node: str,
     error_type: str,
     retry_count: int,
-) -> tuple[str, str, str]:
+) -> tuple[str, str]:
     if error_type in {
         ErrorType.VALIDATION_ERROR.value,
         ErrorType.PROVIDER_AUTH_ERROR.value,
@@ -136,9 +136,11 @@ def _llm_recovery_advice(
     failed_node: str,
     error_type: str,
     message: str,
-) -> tuple[str, str]:
+) -> tuple[str, str, str]:
     """Ask the LLM for a bounded recovery recommendation when it is useful."""
     if failed_node not in {"reviewer", "feedback", "patch"}:
+        return "", "", ""
+    if error_type == ErrorType.PATCH_PUSH_ERROR.value:
         return "", "", ""
     if not get_config().llm_api_key:
         return "", "", ""

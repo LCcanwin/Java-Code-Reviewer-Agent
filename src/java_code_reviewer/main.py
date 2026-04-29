@@ -69,6 +69,14 @@ def _should_proceed_to_router(state: ReviewState) -> bool:
     return state.get("feedback_approved", False)
 
 
+def _route_after_reviewer(state: ReviewState) -> str:
+    if _has_pending_recovery(state):
+        return "recover"
+    if state.get("mode") == ReviewMode.AUDIT_ONLY:
+        return "router"
+    return "feedback"
+
+
 def _route_after_feedback(state: ReviewState) -> str:
     if _has_pending_recovery(state):
         return "recover"
@@ -156,10 +164,11 @@ def compile_graph() -> StateGraph:
 
     graph.add_conditional_edges(
         "reviewer",
-        lambda state: "recover" if _has_pending_recovery(state) else "feedback",
+        _route_after_reviewer,
         {
             "recover": "failure_handler",
             "feedback": "feedback",
+            "router": "option_router",
         },
     )
 

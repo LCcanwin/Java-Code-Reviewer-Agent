@@ -1,13 +1,32 @@
 """Unit tests for failure handling and recovery."""
 
-from java_code_reviewer.main import run_review
+from java_code_reviewer.main import _route_after_reviewer, run_review
 from java_code_reviewer.nodes.failure_handler import failure_handler_node
-from java_code_reviewer.observability import classify_error
+from java_code_reviewer.observability import classify_error, redact_secrets
 from java_code_reviewer.state.review_state import ErrorType, ReviewMode, RunStatus
 
 
 def test_classify_provider_auth_error():
     assert classify_error("crawler", "Failed to fetch PR: 403 Bad credentials") == ErrorType.PROVIDER_AUTH_ERROR.value
+
+
+def test_redact_secrets_removes_tokens_from_urls_and_params():
+    message = "https://user:ghp_secret@github.com/org/repo.git?access_token=abc123"
+
+    redacted = redact_secrets(message)
+
+    assert "ghp_secret" not in redacted
+    assert "abc123" not in redacted
+    assert "***REDACTED***" in redacted
+
+
+def test_audit_only_routes_from_reviewer_to_router_without_feedback():
+    state = {
+        "mode": ReviewMode.AUDIT_ONLY,
+        "pending_recovery": False,
+    }
+
+    assert _route_after_reviewer(state) == "router"
 
 
 def test_failure_handler_falls_back_for_patch_failure_after_retry_budget():

@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 import time
 import uuid
 from collections.abc import Callable
@@ -24,6 +25,12 @@ RECOVERABLE_ERRORS = {
     ErrorType.PATCH_PUSH_ERROR.value,
     ErrorType.UNKNOWN_ERROR.value,
 }
+
+SECRET_PATTERNS = [
+    (re.compile(r"(https://[^:/\s]+:)([^@\s]+)(@)", re.IGNORECASE), lambda m: f"{m.group(1)}***REDACTED***{m.group(3)}"),
+    (re.compile(r"(?i)(token=|access_token=|private_token=)([^&\s]+)"), lambda m: f"{m.group(1)}***REDACTED***"),
+    (re.compile(r"(?i)(authorization:\s*(?:token|bearer)\s+)([^\s]+)"), lambda m: f"{m.group(1)}***REDACTED***"),
+]
 
 
 def ensure_run_metadata(state: ReviewState) -> None:
@@ -136,6 +143,14 @@ def classify_error(node: str, message: str) -> str:
     return ErrorType.UNKNOWN_ERROR.value
 
 
+def redact_secrets(message: object) -> str:
+    """Redact common token patterns before storing, logging, or sending errors to LLMs."""
+    redacted = str(message)
+    for pattern, replacement in SECRET_PATTERNS:
+        redacted = pattern.sub(replacement, redacted)
+    return redacted
+
+
 def mark_run_finished(state: ReviewState) -> ReviewState:
     """Set final run status if it has not already been finalized."""
     if state.get("status") in {RunStatus.FAILED, RunStatus.PARTIAL_SUCCESS}:
@@ -176,10 +191,10 @@ def clear_failure(state: ReviewState) -> None:
 
 def _node_failure_message(state: ReviewState, node: str) -> str:
     if node == "input" and state.get("validation_error"):
-        return state["validation_error"]
+        return redact_secrets(state["validation_error"])
     if node == "patch" and state.get("patch_error"):
-        return state["patch_error"]
-    return state.get("error", "")
+        return redact_secrets(state["patch_error"])
+    return redact_secrets(state.get("error", ""))
 
 
 def _retry_count(state: ReviewState, node: str) -> int:

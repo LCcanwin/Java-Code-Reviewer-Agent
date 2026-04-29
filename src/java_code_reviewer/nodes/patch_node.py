@@ -5,6 +5,7 @@ import json
 from ..git_ops.git_manager import GitManager
 from ..llm.client import LLMClient
 from ..llm.prompts import PATCH_PROMPT, SYSTEM_PROMPT
+from ..observability import redact_secrets
 from ..state.review_state import ReviewState
 
 
@@ -30,7 +31,7 @@ def patch_node(state: ReviewState) -> ReviewState:
             branch=state.get("head_branch") or None,
         )
     except Exception as e:
-        state["patch_error"] = f"Patch generation failed: could not read PR files: {str(e)}"
+        state["patch_error"] = f"Patch generation failed: could not read PR files: {redact_secrets(e)}"
         state["patch_files"] = {}
         return state
 
@@ -68,12 +69,16 @@ def patch_node(state: ReviewState) -> ReviewState:
         }
         state["patch_files"] = patch_files
 
+        if not patch_files:
+            state["patch_error"] = "Patch generation failed: LLM returned no valid patch files"
+            return state
+
         if patch_files:
             commit_sha = _push_patches(state, patch_files)
             state["patch_commit_sha"] = commit_sha
 
     except Exception as e:
-        state["patch_error"] = f"Patch generation failed: {str(e)}"
+        state["patch_error"] = f"Patch generation failed: {redact_secrets(e)}"
         state["patch_files"] = {}
 
     return state
@@ -155,7 +160,7 @@ def _push_patches(state: ReviewState, patch_files: dict[str, str]) -> str:
         )
         return commit_sha
     except Exception as e:
-        state["patch_error"] = f"Failed to push patches: {str(e)}"
+        state["patch_error"] = f"Failed to push patches: {redact_secrets(e)}"
         return ""
 
 
