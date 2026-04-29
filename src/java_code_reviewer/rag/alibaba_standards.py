@@ -1,8 +1,17 @@
 """Alibaba Java development standards (华山版/泰山版) rules."""
 
-from typing import Literal
+from typing import Literal, Optional
 
 RuleSeverity = Literal["blocker", "critical", "warning", "info"]
+RuleLevel = Literal["强制", "推荐", "参考"]
+
+
+SEVERITY_TO_LEVEL: dict[str, RuleLevel] = {
+    "blocker": "强制",
+    "critical": "推荐",
+    "warning": "参考",
+    "info": "参考",
+}
 
 
 class AlibabaStandard:
@@ -17,6 +26,11 @@ class AlibabaStandard:
         description: str,
         examples: list[str],
         keywords: list[str],
+        source: str = "Alibaba Java Development Manual",
+        version: str = "华山版/泰山版",
+        section: str = "",
+        level: Optional[RuleLevel] = None,
+        detection_patterns: Optional[list[str]] = None,
     ):
         self.rule_id = rule_id
         self.title = title
@@ -25,6 +39,11 @@ class AlibabaStandard:
         self.description = description
         self.examples = examples
         self.keywords = keywords
+        self.source = source
+        self.version = version
+        self.section = section or category
+        self.level = level or SEVERITY_TO_LEVEL[severity]
+        self.detection_patterns = detection_patterns or keywords
 
 
 ALIBABA_STANDARDS: dict[str, AlibabaStandard] = {
@@ -55,6 +74,7 @@ ALIBABA_STANDARDS: dict[str, AlibabaStandard] = {
         description="常量命名全部大写，单词间用下划线分隔，正则匹配 [A-Z][A-Z0-9_]*",
         examples=["MAX_SIZE", "DEFAULT_TIMEOUT", "ORDER_STATUS_PENDING"],
         keywords=["static", "final", "const"],
+        detection_patterns=[r"static\s+final", r"final\s+\w+\s+[a-z][A-Za-z0-9]*"],
     ),
     "NAMING-004": AlibabaStandard(
         rule_id="NAMING-004",
@@ -64,6 +84,7 @@ ALIBABA_STANDARDS: dict[str, AlibabaStandard] = {
         description="POJO类中的布尔属性不要加 is 前缀，否则部分框架解析会引起序列化错误",
         examples=["private Boolean deleted;", "private boolean active;"],
         keywords=["private", "boolean", "Boolean", "is"],
+        detection_patterns=[r"\b(?:boolean|Boolean)\s+is[A-Z]\w*"],
     ),
     # Exception Handling (异常处理)
     "EXCEPTION-001": AlibabaStandard(
@@ -74,6 +95,7 @@ ALIBABA_STANDARDS: dict[str, AlibabaStandard] = {
         description="异常不能被吞掉（catch后不记录也不抛出），catch块必须记录日志或抛出",
         examples=["log.error('error', e); throw new RuntimeException(e);"],
         keywords=["catch", "Exception", "e.printStackTrace", "throw"],
+        detection_patterns=[r"catch\s*\([^)]*Exception[^)]*\)\s*\{\s*\}", r"catch\s*\([^)]*\)\s*\{[^}]*(?<!log\.error)(?<!throw)\}"],
     ),
     "EXCEPTION-002": AlibabaStandard(
         rule_id="EXCEPTION-002",
@@ -92,6 +114,7 @@ ALIBABA_STANDARDS: dict[str, AlibabaStandard] = {
         description="finally块中禁止return，否则会吞掉try/catch中的异常",
         examples=["finally { return result; } // BAD"],
         keywords=["finally", "return"],
+        detection_patterns=[r"finally\s*\{[^}]*return\b"],
     ),
     "EXCEPTION-004": AlibabaStandard(
         rule_id="EXCEPTION-004",
@@ -120,6 +143,7 @@ ALIBABA_STANDARDS: dict[str, AlibabaStandard] = {
         description="ThreadLocal使用后必须remove()，避免内存泄漏",
         examples=["threadLocal.remove();"],
         keywords=["ThreadLocal", "remove", "InheritableThreadLocal"],
+        detection_patterns=[r"ThreadLocal<", r"\.remove\(\)"],
     ),
     "CONCURRENCY-003": AlibabaStandard(
         rule_id="CONCURRENCY-003",
@@ -129,6 +153,7 @@ ALIBABA_STANDARDS: dict[str, AlibabaStandard] = {
         description="禁止使用Executors创建线程池，应使用ThreadPoolExecutor明确参数",
         examples=["new ThreadPoolExecutor(core, max, 0L, ...)"],
         keywords=["Executors.newFixedThreadPool", "Executors.newCachedThreadPool", "ThreadPoolExecutor"],
+        detection_patterns=[r"Executors\.new(?:Fixed|Cached|Single|Scheduled)ThreadPool"],
     ),
     # Collection (集合处理)
     "COLLECTION-001": AlibabaStandard(
@@ -139,6 +164,7 @@ ALIBABA_STANDARDS: dict[str, AlibabaStandard] = {
         description="ArrayList删除元素必须使用Iterator，否则会抛出ConcurrentModificationException",
         examples=["iterator.remove()", "list.removeIf()"],
         keywords=["Iterator", "remove", "for-each", "ArrayList"],
+        detection_patterns=[r"for\s*\([^:]+:\s*[^)]+\)\s*\{[^}]*\.remove\("],
     ),
     "COLLECTION-002": AlibabaStandard(
         rule_id="COLLECTION-002",
@@ -148,6 +174,7 @@ ALIBABA_STANDARDS: dict[str, AlibabaStandard] = {
         description="ArrayList、HashMap等在可预估大小时应指定初始容量，避免扩容开销",
         examples=["new ArrayList<>(100)", "new HashMap<>(16)"],
         keywords=["new ArrayList", "new HashMap", "initialCapacity"],
+        detection_patterns=[r"new\s+(?:ArrayList|HashMap)\s*<[^>]*>\s*\(\s*\)"],
     ),
     "COLLECTION-003": AlibabaStandard(
         rule_id="COLLECTION-003",
@@ -157,6 +184,7 @@ ALIBABA_STANDARDS: dict[str, AlibabaStandard] = {
         description="集合判断是否为空应使用isEmpty()，更简洁高效",
         examples=["if (list.isEmpty())", "if (!list.isEmpty())"],
         keywords=["size() == 0", "size() > 0", "isEmpty()"],
+        detection_patterns=[r"\.size\(\)\s*(?:==|>|!=)\s*0"],
     ),
     # SQL Standards (SQL规约)
     "SQL-001": AlibabaStandard(
@@ -167,6 +195,7 @@ ALIBABA_STANDARDS: dict[str, AlibabaStandard] = {
         description="判断是否存在应使用 EXISTS 或将count()改为limit 1",
         examples=["SELECT 1 FROM ... LIMIT 1", "EXISTS(SELECT 1 ...)"],
         keywords=["count(", "SELECT COUNT"],
+        detection_patterns=[r"(?i)select\s+count\s*\("],
     ),
     "SQL-002": AlibabaStandard(
         rule_id="SQL-002",
@@ -176,6 +205,7 @@ ALIBABA_STANDARDS: dict[str, AlibabaStandard] = {
         description="SQL返回列应明确指定，避免使用*导致性能问题和结果不稳定",
         examples=["SELECT id, name, email FROM users"],
         keywords=["SELECT *", "select *"],
+        detection_patterns=[r"(?i)select\s+\*"],
     ),
     # OOP Standards (面向对象)
     "OOP-001": AlibabaStandard(

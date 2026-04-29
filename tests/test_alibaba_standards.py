@@ -23,6 +23,11 @@ class TestAlibabaStandards:
             assert rule.severity in ["blocker", "critical", "warning", "info"]
             assert rule.description
             assert rule.examples
+            assert rule.source
+            assert rule.version
+            assert rule.section
+            assert rule.level in ["强制", "推荐", "参考"]
+            assert rule.detection_patterns
 
     def test_get_all_rules(self):
         rules = get_all_rules()

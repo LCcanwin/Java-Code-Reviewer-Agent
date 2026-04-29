@@ -112,9 +112,11 @@ class Issue(TypedDict):
 
 ### RAG 系统
 
-- `rag/alibaba_standards.py`：20+ 编码规范规则（命名、异常、并发、集合、SQL、面向对象）
-- `rag/knowledge_base.py`：基于 FAISS 的向量数据库，使用 OpenAI Embeddings
-- `rag/retriever.py`：从 Diff 中提取 Java 符号，执行相似性搜索
+- `rag/alibaba_standards.py`：内置阿里巴巴 Java 规范规则，包含来源、版本、章节、规范级别、关键词和检测提示
+- `rag/knowledge_base.py`：混合检索知识库，优先使用关键词/检测模式命中，再合并 FAISS 向量相似度结果
+- `rag/retriever.py`：从 Diff 中提取新增代码、Java 符号和高风险模式，生成检索 query
+
+当前 RAG 使用的是项目内置的结构化规则摘要，不是完整阿里巴巴规范原文库。每条规则会带上 `source/version/section/level` 元数据，便于报告和 Prompt 追溯依据。若 embedding 服务不可用，会自动降级为关键词/检测模式检索。
 
 ### Context Providers
 

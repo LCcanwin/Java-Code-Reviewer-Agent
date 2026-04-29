@@ -1,6 +1,7 @@
 """Knowledge base for RAG-based context retrieval."""
 
 import logging
+import re
 from typing import Optional
 
 import faiss
@@ -18,11 +19,10 @@ class KnowledgeBase:
 
     def __init__(self):
         cfg = get_config()
-        self._embedding_model = OpenAIEmbeddings(
-            model=cfg._cfg["rag"]["embedding_model"],
-            api_key=cfg.llm_api_key,
-            base_url=cfg.llm_base_url,
-        )
+        self._embedding_model: Optional[OpenAIEmbeddings] = None
+        self._embedding_model_name = cfg._cfg["rag"]["embedding_model"]
+        self._api_key = cfg.llm_api_key
+        self._base_url = cfg.llm_base_url
         self._index: Optional[faiss.Index] = None
         self._rules: list[AlibabaStandard] = []
         self._rule_texts: list[str] = []
@@ -42,7 +42,8 @@ class KnowledgeBase:
         self._rule_ids = [rule.rule_id for rule in self._rules]
 
         try:
-            embeddings = self._embedding_model.embed_documents(self._rule_texts)
+            embedding_model = self._get_embedding_model()
+            embeddings = embedding_model.embed_documents(self._rule_texts)
             embeddings_array = np.array(embeddings).astype("float32")
 
             dimension = embeddings_array.shape[1]
@@ -64,9 +65,14 @@ class KnowledgeBase:
             f"Title: {rule.title}\n"
             f"Category: {rule.category}\n"
             f"Severity: {rule.severity}\n"
+            f"Source: {rule.source}\n"
+            f"Version: {rule.version}\n"
+            f"Section: {rule.section}\n"
+            f"Level: {rule.level}\n"
             f"Description: {rule.description}\n"
             f"{examples}\n"
-            f"Keywords: {keywords}"
+            f"Keywords: {keywords}\n"
+            f"Detection Patterns: {', '.join(rule.detection_patterns)}"
         )
 
     def similarity_search(self, query: str, top_k: int = 5) -> list[AlibabaStandard]:
@@ -74,23 +80,80 @@ class KnowledgeBase:
         if not self._built:
             self.build_index()
 
-        # If embedding failed, return default rules
+        keyword_ranked = self._keyword_search(query)
+
         if self._embedding_failed or self._index is None:
-            return self._rules[:top_k] if self._rules else []
+            return keyword_ranked[:top_k] if keyword_ranked else self._rules[:top_k]
 
         try:
-            query_embedding = self._embedding_model.embed_query(query)
+            embedding_model = self._get_embedding_model()
+            query_embedding = embedding_model.embed_query(query)
             query_vector = np.array([query_embedding]).astype("float32")
 
-            k = min(top_k, len(self._rules))
+            k = min(max(top_k * 2, top_k), len(self._rules))
             distances, indices = self._index.search(query_vector, k)
 
-            results = []
+            vector_ranked = []
             for idx in indices[0][:k]:
-                if idx < len(self._rules):
-                    results.append(self._rules[idx])
+                if 0 <= idx < len(self._rules):
+                    vector_ranked.append(self._rules[idx])
 
-            return results
+            return self._merge_rankings(keyword_ranked, vector_ranked, top_k)
         except Exception as e:
             logger.warning(f"Embedding query failed: {e}, returning default rules")
-            return self._rules[:top_k] if self._rules else []
+            return keyword_ranked[:top_k] if keyword_ranked else self._rules[:top_k]
+
+    def _keyword_search(self, query: str) -> list[AlibabaStandard]:
+        """Rank rules by keyword and pattern hits against the query."""
+        query_lower = query.lower()
+        scored: list[tuple[int, AlibabaStandard]] = []
+
+        for rule in self._rules:
+            score = 0
+            for keyword in rule.keywords:
+                if keyword.lower() in query_lower:
+                    score += 3
+            for pattern in rule.detection_patterns:
+                try:
+                    if re.search(pattern, query, flags=re.MULTILINE):
+                        score += 5
+                except re.error:
+                    if pattern.lower() in query_lower:
+                        score += 2
+            if rule.category.lower() in query_lower:
+                score += 1
+            if score:
+                scored.append((score, rule))
+
+        scored.sort(key=lambda item: item[0], reverse=True)
+        return [rule for _, rule in scored]
+
+    def _merge_rankings(
+        self,
+        keyword_ranked: list[AlibabaStandard],
+        vector_ranked: list[AlibabaStandard],
+        top_k: int,
+    ) -> list[AlibabaStandard]:
+        """Merge keyword and vector results while keeping keyword hits first."""
+        results: list[AlibabaStandard] = []
+        seen: set[str] = set()
+
+        for rule in keyword_ranked + vector_ranked:
+            if rule.rule_id in seen:
+                continue
+            results.append(rule)
+            seen.add(rule.rule_id)
+            if len(results) >= top_k:
+                break
+
+        return results
+
+    def _get_embedding_model(self) -> OpenAIEmbeddings:
+        """Lazily initialize embeddings so keyword fallback works without API keys."""
+        if self._embedding_model is None:
+            self._embedding_model = OpenAIEmbeddings(
+                model=self._embedding_model_name,
+                api_key=self._api_key,
+                base_url=self._base_url,
+            )
+        return self._embedding_model
