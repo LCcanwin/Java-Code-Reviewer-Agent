@@ -101,6 +101,51 @@ class Config:
     def review_max_context_lines(self) -> int:
         return self._cfg["review"]["max_context_lines"]
 
+    @property
+    def context_max_chars_per_file(self) -> int:
+        return self._cfg.get("context", {}).get("max_chars_per_file", 6000)
+
+    @property
+    def alibaba_rules_context_enabled(self) -> bool:
+        return self._context_provider_cfg("alibaba_rules").get("enabled", True)
+
+    @property
+    def repo_index_mcp_enabled(self) -> bool:
+        env_value = os.getenv("REPO_INDEX_MCP_ENABLED")
+        if env_value is not None:
+            return env_value.lower() in {"1", "true", "yes", "on"}
+        return self._context_provider_cfg("repo_index_mcp").get("enabled", False)
+
+    @property
+    def repo_index_mcp_server(self) -> str:
+        return os.getenv(
+            "REPO_INDEX_MCP_SERVER",
+            self._context_provider_cfg("repo_index_mcp").get("server", "code_search"),
+        )
+
+    @property
+    def repo_index_mcp_max_files(self) -> int:
+        return self._context_provider_cfg("repo_index_mcp").get("max_files", 20)
+
+    @property
+    def repo_index_mcp_max_snippets_per_file(self) -> int:
+        return self._context_provider_cfg("repo_index_mcp").get("max_snippets_per_file", 5)
+
+    @property
+    def repo_index_mcp_include_tests(self) -> bool:
+        return self._context_provider_cfg("repo_index_mcp").get("include_tests", True)
+
+    @property
+    def repo_index_mcp_include_references(self) -> bool:
+        return self._context_provider_cfg("repo_index_mcp").get("include_references", True)
+
+    @property
+    def repo_index_mcp_include_related_files(self) -> bool:
+        return self._context_provider_cfg("repo_index_mcp").get("include_related_files", True)
+
+    def _context_provider_cfg(self, provider_name: str) -> dict:
+        return self._cfg.get("context", {}).get("providers", {}).get(provider_name, {})
+
 
 def get_config() -> Config:
     """Get the global config instance."""

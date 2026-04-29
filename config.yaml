@@ -24,3 +24,17 @@ rag:
   vector_store: faiss
   embedding_model: text-embedding-3-small
   top_k: 5
+
+context:
+  max_chars_per_file: 6000
+  providers:
+    alibaba_rules:
+      enabled: true
+    repo_index_mcp:
+      enabled: false
+      server: code_search
+      max_files: 20
+      max_snippets_per_file: 5
+      include_tests: true
+      include_references: true
+      include_related_files: true

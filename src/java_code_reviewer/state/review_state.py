@@ -145,6 +145,9 @@ class ReviewState(TypedDict):
 
     # RAG context (file path -> relevant code)
     retrieved_context: dict[str, str]
+    repo_context: NotRequired[dict[str, str]]
+    context_sources: NotRequired[list[str]]
+    context_errors: NotRequired[list[ReviewError]]
 
     # Review results
     issues: list[Issue]
