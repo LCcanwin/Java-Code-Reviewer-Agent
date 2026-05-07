@@ -10,6 +10,10 @@ def test_classify_provider_auth_error():
     assert classify_error("crawler", "Failed to fetch PR: 403 Bad credentials") == ErrorType.PROVIDER_AUTH_ERROR.value
 
 
+def test_classify_patch_path_escape_as_security_error():
+    assert classify_error("patch", "Patch file escapes repository: ../secret") == ErrorType.SECURITY_ERROR.value
+
+
 def test_redact_secrets_removes_tokens_from_urls_and_params():
     message = "https://user:ghp_secret@github.com/org/repo.git?access_token=abc123"
 

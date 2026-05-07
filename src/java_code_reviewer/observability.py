@@ -130,6 +130,8 @@ def classify_error(node: str, message: str) -> str:
         return ErrorType.LLM_PARSE_ERROR.value
     if node == "feedback" and "approved" in lower:
         return ErrorType.FEEDBACK_REJECTED.value
+    if "escapes repository" in lower or "path traversal" in lower:
+        return ErrorType.SECURITY_ERROR.value
     if node == "patch" and "could not read pr files" in lower:
         return ErrorType.PATCH_FILE_READ_ERROR.value
     if node == "patch" and ("push" in lower or "git" in lower):
@@ -138,8 +140,6 @@ def classify_error(node: str, message: str) -> str:
         return ErrorType.PATCH_GENERATION_ERROR.value
     if node in {"planner", "reviewer", "feedback"}:
         return ErrorType.LLM_ERROR.value
-    if "escapes repository" in lower or "path" in lower:
-        return ErrorType.SECURITY_ERROR.value
     return ErrorType.UNKNOWN_ERROR.value
 
 

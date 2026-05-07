@@ -23,6 +23,10 @@ def crawler_node(state: ReviewState) -> ReviewState:
 
         metadata = agent.fetch_pr_metadata(owner, repo, pr_number)
 
+        if metadata.changed_files and not metadata.diff_content.strip():
+            state["error"] = "Failed to fetch PR: diff content is empty for changed files"
+            return state
+
         state["diff_content"] = metadata.diff_content
         state["changed_files"] = metadata.changed_files
         state["pr_title"] = metadata.title

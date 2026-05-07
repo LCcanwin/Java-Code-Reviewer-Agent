@@ -39,6 +39,11 @@ def reviewer_node(state: ReviewState) -> ReviewState:
         llm = LLMClient()
         response = llm.invoke(messages)
 
+        if not _extract_json_array(response):
+            state["error"] = "Review failed: could not parse JSON issues from LLM response"
+            state["issues"] = []
+            return state
+
         issues = _parse_issues(response)
         state["issues"] = issues
 

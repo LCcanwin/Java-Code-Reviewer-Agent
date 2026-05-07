@@ -59,6 +59,23 @@ def test_query_expansion_adds_rule_intent_terms():
     assert "集合判空" in expanded_query
 
 
+def test_retriever_skips_empty_mult_query_buckets():
+    kb = _offline_kb()
+    retriever = Retriever(kb, top_k=3)
+    diff = """--- a/src/User.java
++++ b/src/User.java
+@@ -1,2 +1,3 @@
++private String name;
+"""
+
+    queries = retriever._build_queries("src/User.java", diff)
+
+    assert "detected risk patterns" not in queries
+    assert "expanded rule intent" not in queries
+    assert any(query.startswith("added java code") for query in queries)
+    assert any(query.startswith("file context") for query in queries)
+
+
 def test_retriever_runs_multiple_queries_and_merges_unique_rules():
     class RecordingKnowledgeBase:
         def __init__(self):

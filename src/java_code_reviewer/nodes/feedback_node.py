@@ -93,7 +93,7 @@ def _parse_feedback_response(response: str) -> tuple[bool, str]:
         if not isinstance(parsed, dict):
             return False, "Parsed response is not a valid dictionary"
 
-        approved = parsed.get("approved", False)
+        approved = _parse_bool(parsed.get("approved", False))
         summary = parsed.get("summary", "")
 
         corrections = parsed.get("corrections_needed", [])
@@ -108,10 +108,18 @@ def _parse_feedback_response(response: str) -> tuple[bool, str]:
 
         message = f"{summary}{corrections_str}{missing_str}"
 
-        return bool(approved), message if message else response
+        return approved, message if message else response
 
     except json.JSONDecodeError:
         return False, "Could not parse feedback JSON"
+
+
+def _parse_bool(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"true", "1", "yes", "y"}
+    return bool(value)
 
 
 def _extract_json_object(response: str) -> str:

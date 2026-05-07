@@ -43,17 +43,20 @@ class Retriever:
         expansion_terms = self._expand_query_terms(filepath, added_code, risk_patterns)
 
         query_specs = [
-            ["detected risk patterns", *risk_patterns],
-            ["expanded rule intent", *expansion_terms],
-            ["added java code", *added_lines[:80]],
-            ["java symbols", *symbols[:20]],
-            ["file context", filepath],
+            ("detected risk patterns", risk_patterns),
+            ("expanded rule intent", expansion_terms),
+            ("added java code", added_lines[:80]),
+            ("java symbols", symbols[:20]),
+            ("file context", [filepath]),
         ]
 
         queries = []
         seen = set()
-        for parts in query_specs:
-            query = "\n".join(part for part in parts if part).strip()
+        for label, values in query_specs:
+            values = [value for value in values if value]
+            if not values:
+                continue
+            query = "\n".join([label, *values]).strip()
             if query and query not in seen:
                 queries.append(query)
                 seen.add(query)
